@@ -410,6 +410,326 @@ class Application extends Database
         return $labels;
     }
 
+    /**
+     * Summary counters for admin monitoring dashboard
+     */
+    public function getAdminSummaryStats(): array
+    {
+        $this->ensureDecisionNoteColumn();
+        $this->ensureWithdrawnStatusEnum();
+
+        $stats = [
+            'total' => 0,
+            'last7_days' => 0,
+            'last30_days' => 0,
+            'awaiting_review' => 0,
+            'shortlisted' => 0,
+            'hired' => 0,
+            'withdrawn' => 0,
+        ];
+
+        $queries = [
+            'total' => "SELECT COUNT(*) AS total FROM applications",
+            'last7_days' => "SELECT COUNT(*) AS total FROM applications WHERE applied_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)",
+            'last30_days' => "SELECT COUNT(*) AS total FROM applications WHERE applied_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)",
+            'awaiting_review' => "SELECT COUNT(*) AS total FROM applications WHERE status IN ('applied','viewed')",
+            'shortlisted' => "SELECT COUNT(*) AS total FROM applications WHERE status = 'shortlisted'",
+            'hired' => "SELECT COUNT(*) AS total FROM applications WHERE status = 'hired'",
+            'withdrawn' => "SELECT COUNT(*) AS total FROM applications WHERE status = 'withdrawn'",
+        ];
+
+        foreach ($queries as $key => $sql) {
+            $result = $this->conn->query($sql);
+            if ($result && ($row = $result->fetch_assoc())) {
+                $stats[$key] = (int)($row['total'] ?? 0);
+            }
+            if ($result instanceof mysqli_result) {
+                $result->free();
+            }
+        }
+
+        return $stats;
+    }
+
+    /**
+     * Distribution of applications per status for admin insights
+     */
+    public function getAdminStatusBreakdown(): array
+    {
+        $breakdown = [];
+        foreach ($this->allowedStatuses as $status) {
+            $breakdown[$status] = 0;
+        }
+
+        $sql = "SELECT status, COUNT(*) AS total FROM applications GROUP BY status";
+        $result = $this->conn->query($sql);
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $status = $row['status'] ?? '';
+                if ($status !== '' && isset($breakdown[$status])) {
+                    $breakdown[$status] = (int)($row['total'] ?? 0);
+                }
+            }
+            $result->free();
+        }
+
+        return $breakdown;
+    }
+
+    /**
+     * Paginated list of applications for admin control centre
+     */
+    public function listForAdmin(array $filters = [], int $page = 1, int $perPage = 20): array
+    {
+        $this->ensureDecisionNoteColumn();
+        $this->ensureWithdrawnStatusEnum();
+
+        $page = max(1, $page);
+        $perPage = max(1, min(100, $perPage));
+
+        $appliedFilters = [
+            'status' => isset($filters['status']) ? trim((string)$filters['status']) : '',
+            'keyword' => isset($filters['keyword']) ? trim((string)$filters['keyword']) : '',
+            'job_id' => isset($filters['job_id']) ? (int)$filters['job_id'] : null,
+            'employer_id' => isset($filters['employer_id']) ? (int)$filters['employer_id'] : null,
+            'date_from' => isset($filters['date_from']) ? trim((string)$filters['date_from']) : '',
+            'date_to' => isset($filters['date_to']) ? trim((string)$filters['date_to']) : '',
+        ];
+
+        foreach (['date_from', 'date_to'] as $dateKey) {
+            $value = $appliedFilters[$dateKey];
+            if ($value !== '') {
+                $dt = \DateTime::createFromFormat('Y-m-d', $value);
+                if ($dt === false) {
+                    $appliedFilters[$dateKey] = '';
+                } else {
+                    $appliedFilters[$dateKey] = $dt->format('Y-m-d');
+                }
+            }
+        }
+
+        $response = [
+            'rows' => [],
+            'total' => 0,
+            'page' => $page,
+            'per_page' => $perPage,
+            'total_pages' => 1,
+            'query_error' => null,
+            'applied_filters' => $appliedFilters,
+        ];
+
+        $conditions = ['1 = 1'];
+        $types = '';
+        $params = [];
+
+        $status = $appliedFilters['status'];
+        if ($status !== '' && in_array($status, $this->allowedStatuses, true)) {
+            $conditions[] = 'a.status = ?';
+            $types .= 's';
+            $params[] = $status;
+        }
+
+        $jobId = $appliedFilters['job_id'];
+        if ($jobId !== null && $jobId > 0) {
+            $conditions[] = 'a.job_id = ?';
+            $types .= 'i';
+            $params[] = $jobId;
+        }
+
+        $employerId = $appliedFilters['employer_id'];
+        if ($employerId !== null && $employerId > 0) {
+            $conditions[] = 'j.employer_id = ?';
+            $types .= 'i';
+            $params[] = $employerId;
+        }
+
+        $keyword = $appliedFilters['keyword'];
+        if ($keyword !== '') {
+            $conditions[] = '(u.name LIKE ? OR u.email LIKE ? OR u.phone LIKE ? OR j.title LIKE ? OR e.company_name LIKE ?)';
+            $like = '%' . $keyword . '%';
+            $types .= 'sssss';
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+        }
+
+        $dateFrom = $appliedFilters['date_from'];
+        if ($dateFrom !== '') {
+            $conditions[] = 'DATE(a.applied_at) >= ?';
+            $types .= 's';
+            $params[] = $dateFrom;
+        }
+
+        $dateTo = $appliedFilters['date_to'];
+        if ($dateTo !== '') {
+            $conditions[] = 'DATE(a.applied_at) <= ?';
+            $types .= 's';
+            $params[] = $dateTo;
+        }
+
+        $whereSql = implode(' AND ', $conditions);
+
+        $baseSql = "FROM applications a
+                    INNER JOIN jobs j ON j.id = a.job_id
+                    INNER JOIN employers e ON e.id = j.employer_id
+                    INNER JOIN candidates c ON c.id = a.candidate_id
+                    INNER JOIN users u ON u.id = c.user_id
+                    LEFT JOIN users ue ON ue.id = e.user_id
+                    WHERE $whereSql";
+
+        $countSql = "SELECT COUNT(*) AS total " . $baseSql;
+        $countStmt = $this->conn->prepare($countSql);
+        if ($countStmt === false) {
+            $response['query_error'] = $this->conn->error;
+            return $response;
+        }
+
+        if ($types !== '') {
+            $countStmt->bind_param($types, ...$params);
+        }
+
+        if ($countStmt->execute()) {
+            $countResult = $countStmt->get_result();
+            if ($countResult && ($row = $countResult->fetch_assoc())) {
+                $response['total'] = (int)($row['total'] ?? 0);
+            }
+            if ($countResult) {
+                $countResult->free();
+            }
+        } else {
+            $response['query_error'] = $countStmt->error;
+        }
+        $countStmt->close();
+
+        $total = $response['total'];
+        if ($total > 0) {
+            $response['total_pages'] = (int)ceil($total / $perPage);
+            if ($page > $response['total_pages']) {
+                $page = $response['total_pages'];
+                $response['page'] = $page;
+            }
+        }
+
+        if ($response['query_error'] !== null || $total === 0) {
+            return $response;
+        }
+
+        $offset = ($page - 1) * $perPage;
+
+        $dataSql = "SELECT
+                        a.id,
+                        a.job_id,
+                        a.candidate_id,
+                        a.status,
+                        a.decision_note,
+                        a.applied_at,
+                        j.title AS job_title,
+                        j.status AS job_status,
+                        j.employment_type,
+                        j.location AS job_location,
+                        e.company_name AS employer_name,
+                        e.id AS employer_id,
+                        ue.email AS employer_email,
+                        u.name AS candidate_name,
+                        u.email AS candidate_email,
+                        u.phone AS candidate_phone,
+                        c.location AS candidate_location,
+                        c.headline AS candidate_headline
+                    " . $baseSql . "
+                    ORDER BY a.applied_at DESC
+                    LIMIT ? OFFSET ?";
+
+        $dataStmt = $this->conn->prepare($dataSql);
+        if ($dataStmt === false) {
+            $response['query_error'] = $this->conn->error;
+            return $response;
+        }
+
+        $dataTypes = $types . 'ii';
+        $dataParams = array_merge($params, [$perPage, $offset]);
+        $dataStmt->bind_param($dataTypes, ...$dataParams);
+
+        if ($dataStmt->execute()) {
+            $result = $dataStmt->get_result();
+            if ($result) {
+                while ($row = $result->fetch_assoc()) {
+                    $response['rows'][] = $row;
+                }
+                $result->free();
+            }
+        } else {
+            $response['query_error'] = $dataStmt->error;
+        }
+        $dataStmt->close();
+
+        return $response;
+    }
+
+    /**
+     * Detailed application information for admin review
+     */
+    public function getAdminApplication(int $applicationId): ?array
+    {
+        if ($applicationId <= 0) {
+            return null;
+        }
+
+        $this->ensureDecisionNoteColumn();
+        $this->ensureWithdrawnStatusEnum();
+
+        $sql = "SELECT
+                    a.*,
+                    j.title AS job_title,
+                    j.location AS job_location,
+                    j.salary AS job_salary,
+                    j.employment_type,
+                    j.description AS job_description,
+                    j.status AS job_status,
+                    e.company_name AS employer_name,
+                    e.id AS employer_id,
+                    ue.email AS employer_email,
+                    c.user_id AS candidate_user_id,
+                    c.headline,
+                    c.summary,
+                    c.location AS candidate_location,
+                    c.skills,
+                    c.experience,
+                    c.cv_path,
+                    u.name AS candidate_name,
+                    u.email AS candidate_email,
+                    u.phone AS candidate_phone
+                FROM applications a
+                INNER JOIN jobs j ON j.id = a.job_id
+                INNER JOIN employers e ON e.id = j.employer_id
+                INNER JOIN candidates c ON c.id = a.candidate_id
+                INNER JOIN users u ON u.id = c.user_id
+                LEFT JOIN users ue ON ue.id = e.user_id
+                WHERE a.id = ?
+                LIMIT 1";
+
+        $stmt = $this->conn->prepare($sql);
+        if ($stmt === false) {
+            return null;
+        }
+
+        $stmt->bind_param('i', $applicationId);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return null;
+        }
+
+        $result = $stmt->get_result();
+        $data = $result ? $result->fetch_assoc() : null;
+        if ($result) {
+            $result->free();
+        }
+        $stmt->close();
+
+        return $data ?: null;
+    }
+
     public function candidateHasApplied(int $candidateId, int $jobId): bool
     {
         if ($candidateId <= 0 || $jobId <= 0) {

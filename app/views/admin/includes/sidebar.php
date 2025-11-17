@@ -73,6 +73,13 @@
         <li><a class="nav-link" href="/JobFind/admin/jobs/index.php">Duyệt tin tuyển dụng</a></li>
       </ul>
     </li>
+
+    <li class="nav-item">
+      <a class="nav-link" href="/JobFind/admin/applications/index.php">
+        <i class="bi bi-kanban"></i>
+        <span>Theo dõi ứng tuyển</span>
+      </a>
+    </li>
     
 
     <li class="nav-item">
