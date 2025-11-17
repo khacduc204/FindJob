@@ -32,7 +32,7 @@
   padding: 2.5rem;
   color: white;
   position: relative;
-  overflow: hidden;
+  overflow: auto;
   box-shadow: var(--jf-shadow);
   animation: slideInDown 0.6s ease-out;
 }
@@ -189,7 +189,7 @@
   text-align: center;
   border: 2px solid transparent;
   position: relative;
-  overflow: hidden;
+  overflow: auto;
   animation: fadeInUp 0.6s ease-out;
 }
 
@@ -364,7 +364,7 @@
   height: 8px;
   background: rgba(0,0,0,0.1);
   border-radius: 10px;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .progress-bar-fill {

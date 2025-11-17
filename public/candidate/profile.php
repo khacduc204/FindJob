@@ -197,6 +197,8 @@ if ($cvStatus === 'uploaded') {
   ];
 }
 
+$profileUpdated = isset($_GET['updated']);
+
 $highlightStats = [
     [
         'title' => 'Kinh nghiệm',
@@ -266,9 +268,19 @@ require_once dirname(__DIR__) . '/includes/header.php';
             <button class="btn btn-light border" type="button" onclick="navigator.clipboard?.writeText('<?= htmlspecialchars($email) ?>').catch(() => {});">
               <i class="fa-solid fa-share-nodes me-2"></i>Chia sẻ hồ sơ
             </button>
+            <?php if ($sessionUserId && (int)$sessionRoleId === 3 && (int)$profile['user_id'] === (int)$sessionUserId): ?>
+              <a class="btn btn-outline-secondary" href="<?= BASE_URL ?>/candidate/edit_profile.php">
+                <i class="fa-solid fa-pen-to-square me-2"></i>Chỉnh sửa hồ sơ
+              </a>
+            <?php endif; ?>
           </div>
         </div>
       </div>
+      <?php if ($profileUpdated): ?>
+        <div class="alert alert-success mt-4 shadow-sm" role="alert">
+          <i class="fa-solid fa-circle-check me-2"></i>Hồ sơ của bạn đã được cập nhật. Kiểm tra lại để đảm bảo mọi thông tin chính xác.
+        </div>
+      <?php endif; ?>
       <?php if ($cvAlert): ?>
         <div class="alert alert-<?= htmlspecialchars($cvAlert['type']) ?> mt-4 shadow-sm" role="alert">
           <i class="fa-solid fa-circle-check me-2"></i><?= htmlspecialchars($cvAlert['message']) ?>

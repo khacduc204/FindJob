@@ -88,7 +88,7 @@ body.home-page .jf-header.is-scrolled .jf-topbar a {
 }
 
 .home-main {
-  overflow-x: hidden;
+  overflow-x: auto;
 }
 
 /* ---------------------------------
@@ -217,7 +217,7 @@ body.home-page .jf-header.is-scrolled .jf-topbar a {
 .hero-visual .hero-card {
   position: relative;
   border-radius: var(--home-radius);
-  overflow: hidden;
+  overflow: auto;
   box-shadow: var(--home-shadow);
   transform: translateY(35px);
   background: rgba(255, 255, 255, 0.08);
@@ -292,7 +292,7 @@ body.home-page .jf-header.is-scrolled .jf-topbar a {
   box-shadow: var(--home-shadow-soft);
   transition: var(--home-transition);
   position: relative;
-  overflow: hidden;
+  overflow: auto;
   border: 1px solid transparent;
 }
 
@@ -456,7 +456,7 @@ body.home-page .jf-header.is-scrolled .jf-topbar a {
   box-shadow: var(--home-shadow-soft);
   transition: var(--home-transition);
   position: relative;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .jf-job-card::before {
@@ -551,7 +551,7 @@ body.home-page .jf-header.is-scrolled .jf-topbar a {
   border: 1px solid transparent;
   transition: var(--home-transition);
   position: relative;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .jf-blog-card .tag {

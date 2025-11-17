@@ -34,6 +34,8 @@
   <script src="/JobFind/public/assets/vendor/quill/quill.min.js"></script>
   <script src="/JobFind/public/assets/vendor/tinymce/tinymce.min.js"></script>
 
+  <script src="/JobFind/public/assets/js/form-validation.js" defer></script>
+
   <!-- Template Main JS File -->
   <script src="/JobFind/public/assets/js/main.js"></script>
 

@@ -71,7 +71,7 @@ h6 {
 --------------------------------------------------------------*/
 .back-to-top {
   position: fixed;
-  visibility: hidden;
+  visibility: auto;
   opacity: 0;
   right: 15px;
   bottom: 15px;
@@ -426,7 +426,7 @@ h6 {
     background: white;
     z-index: 9999;
     transition: 0.3s;
-    visibility: hidden;
+    visibility: auto;
     opacity: 0;
   }
 
@@ -1002,7 +1002,7 @@ h6 {
   font-family: var(--bs-font-monospace);
   display: inline-block;
   width: 100%;
-  overflow: hidden;
+  overflow: auto;
   padding: 0.25rem;
   font-size: 12px;
   text-overflow: ellipsis;
@@ -1257,4 +1257,103 @@ h6 {
   text-align: center;
   font-size: 13px;
   color: #012970;
+}
+
+/* ===== Candidate Apply Widget ===== */
+.apply-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  border: 1px solid #e9ecef;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  background-color: #ffffff;
+}
+
+.apply-widget__candidate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+
+.apply-widget__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.apply-widget__candidate-info {
+  flex: 1 1 auto;
+  min-width: 200px;
+}
+
+.apply-widget__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.apply-widget__headline {
+  padding: 0.75rem 1rem;
+  background: #f8f9fa;
+  border-radius: 0.75rem;
+  font-style: italic;
+  color: #495057;
+}
+
+.apply-widget__skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.apply-widget__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.apply-widget__cv-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.apply-widget__radio {
+  margin-bottom: 0;
+}
+
+.apply-widget__upload {
+  border: 1px dashed #adb5bd;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  background: #fcfcfc;
+}
+
+.apply-widget__upload label {
+  font-weight: 600;
+}
+
+.apply-widget__disclaimer {
+  text-align: center;
+  line-height: 1.4;
+}
+
+@media (max-width: 576px) {
+  .apply-widget {
+    padding: 1.25rem;
+  }
+
+  .apply-widget__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .apply-widget__candidate-info {
+    min-width: 160px;
+  }
 }

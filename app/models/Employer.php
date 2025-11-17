@@ -356,5 +356,46 @@ class Employer extends Database {
         $stmt->bind_param("i", $id);
         return $stmt->execute();
     }
+
+    public function updateProfileByUserId(int $userId, array $attributes): bool {
+        $existing = $this->getByUserId($userId);
+        if (!$existing) {
+            return false;
+        }
+
+        $fields = [];
+        $types = '';
+        $params = [];
+        foreach ($attributes as $column => $value) {
+            if (!array_key_exists($column, $existing)) {
+                continue;
+            }
+            $fields[] = $column . ' = ?';
+            $types .= 's';
+            $params[] = $value === '' ? null : $value;
+        }
+
+        if (empty($fields)) {
+            return true;
+        }
+
+        if (array_key_exists('updated_at', $existing)) {
+            $fields[] = 'updated_at = NOW()';
+        }
+
+        $sql = 'UPDATE employers SET ' . implode(', ', $fields) . ' WHERE user_id = ? LIMIT 1';
+        $types .= 'i';
+        $params[] = $userId;
+
+        $stmt = $this->conn->prepare($sql);
+        if ($stmt === false) {
+            return false;
+        }
+
+        $stmt->bind_param($types, ...$params);
+        $result = $stmt->execute();
+        $stmt->close();
+        return $result;
+    }
 }
 ?>

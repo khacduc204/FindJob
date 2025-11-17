@@ -88,12 +88,14 @@
     document.querySelectorAll('.home-search-form').forEach((form) => {
         form.addEventListener('submit', (event) => {
             event.preventDefault();
-            const keyword = form.querySelector('#keyword')?.value.trim();
-            const location = form.querySelector('#location')?.value;
+            const keywordInput = form.querySelector('input[name="keyword"]');
+            const locationSelect = form.querySelector('select[name="location"]');
+            const keyword = keywordInput ? keywordInput.value.trim() : '';
+            const location = locationSelect ? locationSelect.value.trim() : '';
             const params = new URLSearchParams();
-            if (keyword) params.append('q', keyword);
-            if (location) params.append('loc', location);
-            const searchUrl = form.getAttribute('data-search-url') || '/jobs.php';
+            if (keyword) params.append('keyword', keyword);
+            if (location) params.append('location', location);
+            const searchUrl = form.getAttribute('data-search-url') || '/job/share/index.php';
             const url = params.toString() ? `${searchUrl}?${params.toString()}` : searchUrl;
             window.location.href = url;
         });

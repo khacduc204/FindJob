@@ -52,7 +52,27 @@ while ($j = $jobs->fetch_assoc()) {
     if (stripos($j['title'], 'Example') !== false) { $hasJob = true; break; }
 }
 if (!$hasJob) {
-    $jobId = $jobModel->create($empId, 'Example PHP Developer', "We need a PHP developer to join our team.", 'Hanoi', '10-20M', 'Full-time');
+    $jobId = $jobModel->create(
+        $empId,
+        'Example PHP Developer',
+        "We need a PHP developer to join our team.",
+        "2+ years of PHP/Laravel experience, solid MySQL knowledge, teamwork mindset.",
+        'Hanoi',
+        '10-20M',
+        'Full-time',
+        'published',
+        3,
+        date('Y-m-d', strtotime('+30 days'))
+    );
+    if ($jobId) {
+        $seedCategories = $jobModel->getAllCategories();
+        if (!empty($seedCategories)) {
+            $firstCategoryId = (int)($seedCategories[0]['id'] ?? 0);
+            if ($firstCategoryId > 0) {
+                $jobModel->syncCategories((int)$jobId, [$firstCategoryId]);
+            }
+        }
+    }
     echo "Created sample job id=$jobId\n";
 } else echo "Sample job already exists\n";
 

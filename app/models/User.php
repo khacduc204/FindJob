@@ -90,6 +90,40 @@ class User extends Database {
         $stmt->bind_param("i", $user_id);
         return $stmt->execute();
     }
+
+    public function updateBasicInfo(int $user_id, array $data): bool {
+        $allowed = ['name', 'phone'];
+        $fields = [];
+        $types = '';
+        $params = [];
+
+        foreach ($allowed as $column) {
+            if (!array_key_exists($column, $data)) {
+                continue;
+            }
+            $fields[] = $column . ' = ?';
+            $types .= 's';
+            $params[] = $data[$column] === '' ? null : $data[$column];
+        }
+
+        if (empty($fields)) {
+            return true;
+        }
+
+        $sql = 'UPDATE users SET ' . implode(', ', $fields) . ' WHERE id = ?';
+        $types .= 'i';
+        $params[] = $user_id;
+
+        $stmt = $this->conn->prepare($sql);
+        if ($stmt === false) {
+            return false;
+        }
+
+        $stmt->bind_param($types, ...$params);
+        $result = $stmt->execute();
+        $stmt->close();
+        return $result;
+    }
     
 }
 ?>

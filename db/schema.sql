@@ -214,3 +214,11 @@ INSERT INTO job_categories (name, description) VALUES
 ('Công nghệ thông tin', 'Lập trình, kiểm thử, hệ thống'),
 ('Marketing', 'Quảng cáo, SEO, sáng tạo nội dung'),
 ('Kinh doanh', 'Bán hàng, tư vấn khách hàng');
+
+
+--Update November 2025: Add quantity and deadline to jobs
+ALTER TABLE jobs
+ADD COLUMN `quantity` INT DEFAULT 1 AFTER `employment_type`,
+ADD COLUMN `deadline` DATE DEFAULT NULL AFTER `quantity`,
+ADD COLUMN `job_requirements` TEXT AFTER `description`;
+

@@ -1,6 +1,8 @@
 <?php
 require_once dirname(__DIR__, 2) . '/config/config.php';
 require_once dirname(__DIR__, 2) . '/app/models/Employer.php';
+require_once dirname(__DIR__, 2) . '/app/models/User.php';
+require_once dirname(__DIR__, 2) . '/app/helpers/company_logo.php';
 
 if (!isset($_SESSION['user_id']) || $_SESSION['role_id'] != 1) {
   header('Location: /JobFind/public/403.php');
@@ -8,19 +10,92 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role_id'] != 1) {
 }
 
 $employerModel = new Employer();
+$userModel = new User();
+
+$errors = [];
+$values = [
+  'user_id' => '',
+  'company_name' => '',
+  'website' => '',
+  'address' => '',
+  'about' => ''
+];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  $user_id = (int)$_POST['user_id'];
-  $company_name = $employerModel->conn->real_escape_string($_POST['company_name']);
-  $website = $employerModel->conn->real_escape_string($_POST['website'] ?? '');
-  $address = $employerModel->conn->real_escape_string($_POST['address'] ?? '');
-  $about = $employerModel->conn->real_escape_string($_POST['about'] ?? '');
-  $employerModel->createForUser($user_id, $company_name, $website, $address, $about);
-  header('Location: /JobFind/admin/employer/employers.php');
-  exit;
+  $values['user_id'] = trim((string)($_POST['user_id'] ?? ''));
+  $values['company_name'] = trim((string)($_POST['company_name'] ?? ''));
+  $values['website'] = trim((string)($_POST['website'] ?? ''));
+  $values['address'] = trim((string)($_POST['address'] ?? ''));
+  $values['about'] = trim((string)($_POST['about'] ?? ''));
+
+  $userId = (int)$values['user_id'];
+  if ($userId <= 0) {
+    $errors[] = 'Vui lòng chọn tài khoản nhà tuyển dụng.';
+  } else {
+    $user = $userModel->getById($userId);
+    if (!$user || (int)($user['role_id'] ?? 0) !== 2) {
+      $errors[] = 'Tài khoản được chọn không hợp lệ hoặc không phải nhà tuyển dụng.';
+    } elseif ($employerModel->getByUserId($userId)) {
+      $errors[] = 'Tài khoản này đã có hồ sơ doanh nghiệp.';
+    }
+  }
+
+  if ($values['company_name'] === '') {
+    $errors[] = 'Vui lòng nhập tên công ty.';
+  }
+
+  if ($values['website'] !== '' && !filter_var($values['website'], FILTER_VALIDATE_URL)) {
+    $errors[] = 'Đường dẫn website không hợp lệ. Vui lòng nhập dạng https://example.com.';
+  }
+
+  $logoPath = null;
+  if (isset($_FILES['company_logo']) && is_array($_FILES['company_logo']) && (int)($_FILES['company_logo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+    $logoError = null;
+    $logoResult = employer_handle_logo_upload($_FILES['company_logo'], $logoError);
+    if ($logoResult === false) {
+      $errors[] = $logoError ?? 'Không thể tải lên logo doanh nghiệp.';
+    } else {
+      $logoPath = $logoResult;
+    }
+  }
+
+  if (empty($errors)) {
+    $insertId = $employerModel->createForUser(
+      $userId,
+      $values['company_name'],
+      $values['website'] !== '' ? $values['website'] : null,
+      $values['address'] !== '' ? $values['address'] : null,
+      $values['about'] !== '' ? $values['about'] : null,
+      $logoPath
+    );
+
+    if ($insertId) {
+      $_SESSION['admin_employer_flash'] = [
+        'type' => 'success',
+        'message' => 'Thêm mới hồ sơ nhà tuyển dụng thành công.'
+      ];
+      header('Location: /JobFind/admin/employer/employers.php');
+      exit;
+    }
+
+    if ($logoPath !== null) {
+      employer_remove_logo($logoPath);
+    }
+    $errors[] = 'Không thể tạo hồ sơ nhà tuyển dụng. Vui lòng thử lại.';
+  } else {
+    if ($logoPath !== null) {
+      employer_remove_logo($logoPath);
+    }
+  }
 }
 
-$users = $employerModel->conn->query("SELECT id, email FROM users WHERE role_id = 2 ORDER BY id");
+$usersResult = $employerModel->conn->query("SELECT id, email FROM users WHERE role_id = 2 ORDER BY email ASC");
+$employerUsers = [];
+if ($usersResult) {
+  while ($row = $usersResult->fetch_assoc()) {
+    $employerUsers[] = $row;
+  }
+}
 
 ob_start();
 ?>
@@ -37,41 +112,56 @@ ob_start();
 
 <section class="section">
   <div class="card p-4 shadow-sm">
-    <form method="POST">
-      <div class="row mb-3">
-        <div class="col-md-6">
-          <label class="form-label">Người dùng</label>
-          <select name="user_id" class="form-select" required>
-            <option value="">-- Chọn người dùng --</option>
-            <?php while ($u = $users->fetch_assoc()): ?>
-              <option value="<?= $u['id'] ?>"><?= htmlspecialchars($u['email']) ?></option>
-            <?php endwhile; ?>
-          </select>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">Tên công ty</label>
-          <input type="text" name="company_name" class="form-control" required>
-        </div>
+    <?php if (!empty($errors)): ?>
+      <div class="alert alert-danger">
+        <ul class="mb-0">
+          <?php foreach ($errors as $error): ?>
+            <li><?= htmlspecialchars($error) ?></li>
+          <?php endforeach; ?>
+        </ul>
+      </div>
+    <?php endif; ?>
+
+    <form method="POST" enctype="multipart/form-data" class="row g-4" novalidate>
+      <div class="col-md-6">
+        <label class="form-label fw-semibold" for="user_id">Tài khoản nhà tuyển dụng <span class="text-danger">*</span></label>
+        <select name="user_id" id="user_id" class="form-select" required>
+          <option value="">-- Chọn người dùng --</option>
+          <?php foreach ($employerUsers as $userItem): ?>
+            <option value="<?= (int)$userItem['id'] ?>" <?= $values['user_id'] === (string)$userItem['id'] ? 'selected' : '' ?>><?= htmlspecialchars($userItem['email']) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <div class="form-text">Chỉ hiển thị tài khoản có vai trò nhà tuyển dụng.</div>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label fw-semibold" for="company_name">Tên công ty <span class="text-danger">*</span></label>
+        <input type="text" name="company_name" id="company_name" class="form-control" value="<?= htmlspecialchars($values['company_name']) ?>" required>
       </div>
 
-      <div class="mb-3">
-        <label class="form-label">Website</label>
-        <input type="text" name="website" class="form-control">
+      <div class="col-12">
+        <label class="form-label fw-semibold" for="company_logo">Logo doanh nghiệp</label>
+        <input type="file" class="form-control" name="company_logo" id="company_logo" accept="image/png,image/jpeg,image/gif,image/webp">
+        <div class="form-text">Tùy chọn · Hỗ trợ PNG, JPG, GIF, WEBP (tối đa 3MB).</div>
       </div>
 
-      <div class="mb-3">
-        <label class="form-label">Địa chỉ</label>
-        <input type="text" name="address" class="form-control">
+      <div class="col-md-6">
+        <label class="form-label fw-semibold" for="website">Website</label>
+        <input type="url" name="website" id="website" class="form-control" placeholder="https://example.com" value="<?= htmlspecialchars($values['website']) ?>">
       </div>
 
-      <div class="mb-3">
-        <label class="form-label">Giới thiệu</label>
-        <textarea name="about" class="form-control" rows="3"></textarea>
+      <div class="col-md-6">
+        <label class="form-label fw-semibold" for="address">Địa chỉ</label>
+        <input type="text" name="address" id="address" class="form-control" placeholder="Tòa nhà, đường, thành phố" value="<?= htmlspecialchars($values['address']) ?>">
       </div>
 
-      <div class="text-end">
-        <a href="/JobFind/admin/employers/employers.php" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Huỷ</a>
-        <button type="submit" class="btn btn-success" name="add"><i class="bi bi-save"></i> Lưu</button>
+      <div class="col-12">
+        <label class="form-label fw-semibold" for="about">Giới thiệu doanh nghiệp</label>
+        <textarea name="about" id="about" class="form-control" rows="4" placeholder="Tầm nhìn, sứ mệnh, đội ngũ cốt lõi..."><?= htmlspecialchars($values['about']) ?></textarea>
+      </div>
+
+      <div class="col-12 d-flex justify-content-end gap-2">
+        <a href="/JobFind/admin/employers/employers.php" class="btn btn-light"><i class="bi bi-arrow-left"></i> Huỷ</a>
+        <button type="submit" class="btn btn-success" name="add"><i class="bi bi-save"></i> Lưu hồ sơ</button>
       </div>
     </form>
   </div>

@@ -143,49 +143,68 @@ class Candidate extends Database {
      */
     public function updateProfile($user_id, $data) {
         // Update users.name and users.phone if provided
-        if (!empty($data['full_name']) || !empty($data['phone'])) {
-            $parts = [];
-            $types = '';
-            $params = [];
-            if (!empty($data['full_name'])) {
-                $parts[] = 'name = ?';
-                $types .= 's';
-                $params[] = $data['full_name'];
+        $userFields = [];
+        $userTypes = '';
+        $userParams = [];
+        if (array_key_exists('full_name', $data)) {
+            $userFields[] = 'name = ?';
+            $userTypes .= 's';
+            $userParams[] = $data['full_name'] === '' ? null : $data['full_name'];
+        }
+        if (array_key_exists('phone', $data)) {
+            $userFields[] = 'phone = ?';
+            $userTypes .= 's';
+            $userParams[] = $data['phone'] === '' ? null : $data['phone'];
+        }
+        if (!empty($userFields)) {
+            $sql = "UPDATE users SET " . implode(', ', $userFields) . " WHERE id = ?";
+            $userTypes .= 'i';
+            $userParams[] = $user_id;
+            $stmt = $this->conn->prepare($sql);
+            if ($stmt === false) {
+                return false;
             }
-            if (!empty($data['phone'])) {
-                $parts[] = 'phone = ?';
-                $types .= 's';
-                $params[] = $data['phone'];
-            }
-            if (!empty($parts)) {
-                $sql = "UPDATE users SET " . implode(', ', $parts) . " WHERE id = ?";
-                $types .= 'i';
-                $params[] = $user_id;
-                $stmt = $this->conn->prepare($sql);
-                if ($stmt === false) return false;
-                $stmt->bind_param($types, ...$params);
-                $stmt->execute();
-            }
+            $stmt->bind_param($userTypes, ...$userParams);
+            $stmt->execute();
+            $stmt->close();
         }
 
-        // Update candidates fields
         $fields = [];
         $types = '';
         $params = [];
-        if (isset($data['headline'])) {
-            $fields[] = 'headline = ?'; $types .= 's'; $params[] = $data['headline'];
+        if (array_key_exists('headline', $data)) {
+            $fields[] = 'headline = ?';
+            $types .= 's';
+            $params[] = $data['headline'] === '' ? null : $data['headline'];
         }
-        if (isset($data['summary'])) {
-            $fields[] = 'summary = ?'; $types .= 's'; $params[] = $data['summary'];
+        if (array_key_exists('summary', $data)) {
+            $fields[] = 'summary = ?';
+            $types .= 's';
+            $params[] = $data['summary'] === '' ? null : $data['summary'];
         }
-        if (isset($data['location'])) {
-            $fields[] = 'location = ?'; $types .= 's'; $params[] = $data['location'];
+        if (array_key_exists('location', $data)) {
+            $fields[] = 'location = ?';
+            $types .= 's';
+            $params[] = $data['location'] === '' ? null : $data['location'];
         }
-        if (isset($data['skills'])) {
-            $fields[] = 'skills = ?'; $types .= 's'; $params[] = $data['skills'];
+        if (array_key_exists('skills', $data)) {
+            $fields[] = 'skills = ?';
+            $types .= 's';
+            $params[] = $data['skills'];
         }
-        if (isset($data['experience'])) {
-            $fields[] = 'experience = ?'; $types .= 's'; $params[] = $data['experience'];
+        if (array_key_exists('experience', $data)) {
+            $fields[] = 'experience = ?';
+            $types .= 's';
+            $params[] = $data['experience'];
+        }
+        if (array_key_exists('profile_picture', $data)) {
+            if ($data['profile_picture'] === null || $data['profile_picture'] === '') {
+                $fields[] = 'profile_picture = NULL';
+            } else {
+                $fields[] = 'profile_picture = ?';
+                $types .= 's';
+                $params[] = $data['profile_picture'];
+            }
         }
 
         if (!empty($fields)) {
@@ -193,9 +212,13 @@ class Candidate extends Database {
             $types .= 'i';
             $params[] = $user_id;
             $stmt = $this->conn->prepare($sql);
-            if ($stmt === false) return false;
+            if ($stmt === false) {
+                return false;
+            }
             $stmt->bind_param($types, ...$params);
-            return $stmt->execute();
+            $result = $stmt->execute();
+            $stmt->close();
+            return $result;
         }
         return true;
     }
@@ -242,10 +265,25 @@ class Candidate extends Database {
     }
 
     public function updateAvatar($user_id, $avatar_path) {
-        // Update users.avatar_path
+        if ($avatar_path === null) {
+            $stmt = $this->conn->prepare("UPDATE users SET avatar_path = NULL WHERE id = ?");
+            if ($stmt === false) {
+                return false;
+            }
+            $stmt->bind_param("i", $user_id);
+            $result = $stmt->execute();
+            $stmt->close();
+            return $result;
+        }
+
         $stmt = $this->conn->prepare("UPDATE users SET avatar_path = ? WHERE id = ?");
+        if ($stmt === false) {
+            return false;
+        }
         $stmt->bind_param("si", $avatar_path, $user_id);
-        return $stmt->execute();
+        $result = $stmt->execute();
+        $stmt->close();
+        return $result;
     }
 }
 ?>

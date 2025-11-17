@@ -32,6 +32,18 @@ $totalPages = (int)($jobsData['total_pages'] ?? 1);
 $queryError = $jobsData['query_error'] ?? null;
 $displayedJobs = count($jobs);
 
+$jobCategoryMap = [];
+if (!empty($jobs)) {
+  $jobIds = [];
+  foreach ($jobs as $jobItem) {
+    $jobIds[] = (int)($jobItem['id'] ?? 0);
+  }
+  $jobIds = array_values(array_filter(array_unique($jobIds))); 
+  if (!empty($jobIds)) {
+    $jobCategoryMap = $jobController->getCategoriesForJobs($jobIds);
+  }
+}
+
 $flash = $_SESSION['job_flash'] ?? null;
 unset($_SESSION['job_flash']);
 
@@ -87,6 +99,8 @@ require_once dirname(__DIR__) . '/includes/header.php';
                 <th scope="col">Tiêu đề</th>
                 <th scope="col" class="d-none d-md-table-cell">Địa điểm</th>
                 <th scope="col" class="d-none d-md-table-cell">Hình thức</th>
+                <th scope="col" class="d-none d-lg-table-cell">Số lượng</th>
+                <th scope="col" class="d-none d-lg-table-cell">Hạn nộp</th>
                 <th scope="col">Trạng thái</th>
                 <th scope="col" class="d-none d-lg-table-cell">Cập nhật</th>
                 <th scope="col" class="text-end">Thao tác</th>
@@ -109,14 +123,25 @@ require_once dirname(__DIR__) . '/includes/header.php';
                   $updatedText = $updatedAt ? date('d/m/Y H:i', strtotime($updatedAt)) : '—';
                   $employmentType = $job['employment_type'] ?: 'Chưa cập nhật';
                   $location = $job['location'] ?: 'Chưa cập nhật';
+          $jobCategories = $jobCategoryMap[(int)($job['id'] ?? 0)] ?? [];
                 ?>
                 <tr>
                   <td>
                     <div class="fw-semibold mb-1"><?= htmlspecialchars($job['title']) ?></div>
                     <div class="text-muted small d-md-none"><?= htmlspecialchars($location) ?></div>
+                    <div class="text-muted small d-lg-none">Hạn nộp: <?= $job['deadline'] ? htmlspecialchars(date('d/m/Y', strtotime($job['deadline']))) : 'Không giới hạn' ?></div>
+            <?php if (!empty($jobCategories)) : ?>
+              <div class="mt-2 d-flex flex-wrap gap-1">
+                <?php foreach ($jobCategories as $category) : ?>
+                  <span class="badge bg-success bg-opacity-10 text-success border border-success"><?= htmlspecialchars($category['name']) ?></span>
+                <?php endforeach; ?>
+              </div>
+            <?php endif; ?>
                   </td>
                   <td class="d-none d-md-table-cell text-muted"><?= htmlspecialchars($location) ?></td>
                   <td class="d-none d-md-table-cell text-muted"><?= htmlspecialchars($employmentType) ?></td>
+                  <td class="d-none d-lg-table-cell text-muted"><?= $job['quantity'] ? (int)$job['quantity'] : 'Không giới hạn' ?></td>
+                  <td class="d-none d-lg-table-cell text-muted"><?= $job['deadline'] ? htmlspecialchars(date('d/m/Y', strtotime($job['deadline']))) : 'Không giới hạn' ?></td>
                   <td><span class="badge bg-<?= $statusClass ?>"><?= htmlspecialchars($statusLabel) ?></span></td>
                   <td class="d-none d-lg-table-cell text-muted small"><?= htmlspecialchars($updatedText) ?></td>
                   <td class="text-end">

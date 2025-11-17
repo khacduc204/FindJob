@@ -143,6 +143,8 @@ ob_start();
               <th scope="col">Tiêu đề</th>
               <th scope="col">Nhà tuyển dụng</th>
               <th scope="col">Trạng thái</th>
+              <th scope="col" class="d-none d-xl-table-cell">Số lượng</th>
+              <th scope="col" class="d-none d-xl-table-cell">Hạn nộp</th>
               <th scope="col" class="d-none d-lg-table-cell">Tạo lúc</th>
               <th scope="col" class="d-none d-lg-table-cell">Cập nhật</th>
               <th scope="col" class="text-end">Thao tác</th>
@@ -188,6 +190,8 @@ ob_start();
                     <?php endif; ?>
                   </td>
                   <td><span class="badge bg-<?= htmlspecialchars($statusMeta['badge']) ?>"><?= htmlspecialchars($statusMeta['label']) ?></span></td>
+                  <td class="d-none d-xl-table-cell text-muted small"><?= isset($job['quantity']) && $job['quantity'] ? (int)$job['quantity'] : '—' ?></td>
+                  <td class="d-none d-xl-table-cell text-muted small"><?= $job['deadline'] ? htmlspecialchars(date('d/m/Y', strtotime($job['deadline']))) : '—' ?></td>
                   <td class="d-none d-lg-table-cell text-muted small"><?= htmlspecialchars($createdLabel) ?></td>
                   <td class="d-none d-lg-table-cell text-muted small"><?= htmlspecialchars($updatedLabel) ?></td>
                   <td class="text-end">

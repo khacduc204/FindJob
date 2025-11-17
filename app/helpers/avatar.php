@@ -148,6 +148,33 @@ function handle_avatar_upload($file, &$err = null) {
     return rtrim(AVATAR_UPLOAD_DIR, '/\\') . '/' . $filename;
 }
 
+function remove_avatar_file(?string $relativePath): void {
+    if (empty($relativePath)) {
+        return;
+    }
+
+    $normalized = ltrim(str_replace('\\', '/', $relativePath), '/');
+    if ($normalized === '') {
+        return;
+    }
+
+    $allowedPrefix = trim(str_replace('\\', '/', AVATAR_UPLOAD_DIR), '/');
+    if ($allowedPrefix !== '' && strpos($normalized, $allowedPrefix) !== 0) {
+        return;
+    }
+
+    $publicRoot = dirname(__DIR__, 2) . '/public/';
+    $fullPath = $publicRoot . $normalized;
+    if (is_file($fullPath)) {
+        @unlink($fullPath);
+    }
+
+    $thumbPath = preg_replace('/(\.[^\/\.]+)$/', '_thumb$1', $fullPath);
+    if ($thumbPath && $thumbPath !== $fullPath && is_file($thumbPath)) {
+        @unlink($thumbPath);
+    }
+}
+
 function avatar_upload_error_message($code) {
     switch ($code) {
         case UPLOAD_ERR_INI_SIZE:

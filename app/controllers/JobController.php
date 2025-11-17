@@ -38,12 +38,20 @@ class JobController {
         return $this->jobModel->getByEmployerPaginated($emp['id'], $page, $perPage);
     }
 
-    public function createJob($user_id, $title, $description, $location = null, $salary = null, $employment_type = null, $status = 'draft') {
+    public function createJob($user_id, $title, $description, $jobRequirements = null, $location = null, $salary = null, $employment_type = null, $status = 'draft', $quantity = null, $deadline = null, array $categoryIds = []) {
         $emp = $this->ensureEmployer($user_id);
-        return $this->jobModel->create($emp['id'], $title, $description, $location, $salary, $employment_type, 'draft');
+        if (!$emp) {
+            return false;
+        }
+        $jobId = $this->jobModel->create($emp['id'], $title, $description, $jobRequirements, $location, $salary, $employment_type, 'draft', $quantity, $deadline);
+        if (!$jobId) {
+            return false;
+        }
+        $this->jobModel->syncCategories((int)$jobId, $categoryIds);
+        return $jobId;
     }
 
-    public function updateJob($user_id, $job_id, $title, $description, $location = null, $salary = null, $employment_type = null, $status = 'draft') {
+    public function updateJob($user_id, $job_id, $title, $description, $jobRequirements = null, $location = null, $salary = null, $employment_type = null, $status = 'draft', $quantity = null, $deadline = null, array $categoryIds = []) {
         $emp = $this->ensureEmployer($user_id);
         if (!$emp) {
             return false;
@@ -56,7 +64,23 @@ class JobController {
         if ($status !== $currentStatus) {
             $status = $currentStatus;
         }
-        return $this->jobModel->update($job_id, $emp['id'], $title, $description, $location, $salary, $employment_type, $status);
+        $updated = $this->jobModel->update($job_id, $emp['id'], $title, $description, $jobRequirements, $location, $salary, $employment_type, $status, $quantity, $deadline);
+        if ($updated) {
+            $this->jobModel->syncCategories((int)$job_id, $categoryIds);
+        }
+        return $updated;
+    }
+
+    public function getCategories(): array {
+        return $this->jobModel->getAllCategories();
+    }
+
+    public function getCategoryIdsForJob(int $jobId): array {
+        return $this->jobModel->getCategoryIdsForJob($jobId);
+    }
+
+    public function getCategoriesForJobs(array $jobIds): array {
+        return $this->jobModel->getCategoriesForJobs($jobIds);
     }
 
     public function getJobForEmployer($user_id, $job_id) {

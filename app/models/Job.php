@@ -1,35 +1,304 @@
 <?php
 // app/models/Job.php
-require_once __DIR__ . '/Database.php';
+require_once __DIR__ . '/database.php';
 
 class Job extends Database {
     private array $allowedStatuses = ['draft', 'published', 'closed'];
 
-    public function create($employer_id, $title, $description, $location = null, $salary = null, $employment_type = null, $status = 'draft') {
+    private function normalizeOptionalString($value): ?string {
+        if ($value === null) {
+            return null;
+        }
+        $value = trim((string)$value);
+        return $value === '' ? null : $value;
+    }
+
+    private function normalizeQuantity($quantity): ?int {
+        if ($quantity === null || $quantity === '') {
+            return null;
+        }
+        $quantity = (int)$quantity;
+        return $quantity > 0 ? $quantity : null;
+    }
+
+    private function normalizeDeadline($deadline): ?string {
+        if ($deadline === null) {
+            return null;
+        }
+        $deadline = trim((string)$deadline);
+        if ($deadline === '') {
+            return null;
+        }
+    $date = \DateTime::createFromFormat('Y-m-d', $deadline);
+        if ($date === false) {
+            return null;
+        }
+        return $date->format('Y-m-d');
+    }
+
+    private function normalizeLongText($value): ?string {
+        if ($value === null) {
+            return null;
+        }
+        $value = trim((string)$value);
+        return $value === '' ? null : $value;
+    }
+
+    public static function isExpired(array $job): bool {
+        $deadline = $job['deadline'] ?? null;
+        if ($deadline === null || $deadline === '') {
+            return false;
+        }
+        $timestamp = strtotime($deadline);
+        if ($timestamp === false) {
+            return false;
+        }
+        return $timestamp < strtotime('today');
+    }
+
+    public static function isActive(array $job): bool {
+        return ($job['status'] ?? '') === 'published' && !self::isExpired($job);
+    }
+
+    public function create($employer_id, $title, $description, $jobRequirements = null, $location = null, $salary = null, $employment_type = null, $status = 'draft', $quantity = null, $deadline = null) {
         $status = in_array($status, $this->allowedStatuses, true) ? $status : 'draft';
-        $sql = "INSERT INTO jobs (employer_id, title, description, location, salary, employment_type, status, updated_at) VALUES (?,?,?,?,?,?,?, NOW())";
+        $location = $this->normalizeOptionalString($location);
+        $salary = $this->normalizeOptionalString($salary);
+        $employment_type = $this->normalizeOptionalString($employment_type);
+        $quantity = $this->normalizeQuantity($quantity);
+        $deadline = $this->normalizeDeadline($deadline);
+        $jobRequirements = $this->normalizeLongText($jobRequirements);
+
+        $sql = "INSERT INTO jobs (employer_id, title, description, job_requirements, location, salary, employment_type, status, quantity, deadline, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?, NOW())";
         $stmt = $this->conn->prepare($sql);
         if ($stmt === false) {
             return false;
         }
-        $stmt->bind_param("issssss", $employer_id, $title, $description, $location, $salary, $employment_type, $status);
+        $stmt->bind_param(
+            'isssssssis',
+            $employer_id,
+            $title,
+            $description,
+            $jobRequirements,
+            $location,
+            $salary,
+            $employment_type,
+            $status,
+            $quantity,
+            $deadline
+        );
         if ($stmt->execute()) {
             $insertId = $this->conn->insert_id;
             $stmt->close();
             return $insertId;
         }
+
         $stmt->close();
         return false;
     }
 
-    public function update($job_id, $employer_id, $title, $description, $location = null, $salary = null, $employment_type = null, $status = 'draft') {
+    public function getAllCategories(): array {
+        $sql = "SELECT id, name, description FROM job_categories ORDER BY name ASC";
+        $result = $this->conn->query($sql);
+        if (!$result) {
+            return [];
+        }
+        $categories = [];
+        while ($row = $result->fetch_assoc()) {
+            $id = (int)($row['id'] ?? 0);
+            if ($id > 0) {
+                $categories[] = [
+                    'id' => $id,
+                    'name' => (string)($row['name'] ?? ''),
+                    'description' => $row['description'] ?? null,
+                ];
+            }
+        }
+        $result->free();
+        return $categories;
+    }
+
+    public function getCategoryIdsForJob(int $jobId): array {
+        $jobId = (int)$jobId;
+        if ($jobId <= 0) {
+            return [];
+        }
+        $stmt = $this->conn->prepare("SELECT category_id FROM job_category_map WHERE job_id = ?");
+        if ($stmt === false) {
+            return [];
+        }
+        $stmt->bind_param('i', $jobId);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return [];
+        }
+        $result = $stmt->get_result();
+        $ids = [];
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $categoryId = (int)($row['category_id'] ?? 0);
+                if ($categoryId > 0) {
+                    $ids[] = $categoryId;
+                }
+            }
+            $result->free();
+        }
+        $stmt->close();
+        return array_values(array_unique($ids));
+    }
+
+    public function getCategoriesForJob(int $jobId): array {
+        $map = $this->getCategoriesForJobs([$jobId]);
+        return $map[$jobId] ?? [];
+    }
+
+    public function getCategoriesForJobs(array $jobIds): array {
+        if (empty($jobIds)) {
+            return [];
+        }
+        $jobIds = array_values(array_unique(array_map('intval', $jobIds)));
+        $jobIds = array_filter($jobIds, static function ($value) {
+            return $value > 0;
+        });
+        if (empty($jobIds)) {
+            return [];
+        }
+        $placeholders = implode(',', array_fill(0, count($jobIds), '?'));
+        $types = str_repeat('i', count($jobIds));
+        $sql = "SELECT m.job_id, c.id AS category_id, c.name
+                FROM job_category_map m
+                INNER JOIN job_categories c ON c.id = m.category_id
+                WHERE m.job_id IN ($placeholders)
+                ORDER BY c.name ASC";
+
+        $stmt = $this->conn->prepare($sql);
+        if ($stmt === false) {
+            return [];
+        }
+
+        $stmt->bind_param($types, ...$jobIds);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return [];
+        }
+
+        $result = $stmt->get_result();
+        $map = [];
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $jobId = (int)($row['job_id'] ?? 0);
+                $categoryId = (int)($row['category_id'] ?? 0);
+                $name = (string)($row['name'] ?? '');
+                if ($jobId > 0 && $categoryId > 0) {
+                    if (!isset($map[$jobId])) {
+                        $map[$jobId] = [];
+                    }
+                    $map[$jobId][] = [
+                        'id' => $categoryId,
+                        'name' => $name,
+                    ];
+                }
+            }
+            $result->free();
+        }
+        $stmt->close();
+        return $map;
+    }
+
+    public function syncCategories(int $jobId, array $categoryIds): bool {
+        $jobId = (int)$jobId;
+        if ($jobId <= 0) {
+            return false;
+        }
+
+        $categoryIds = array_values(array_unique(array_map('intval', $categoryIds)));
+        $categoryIds = array_filter($categoryIds, static function ($value) {
+            return $value > 0;
+        });
+
+        $validIds = [];
+        if (!empty($categoryIds)) {
+            $placeholders = implode(',', array_fill(0, count($categoryIds), '?'));
+            $types = str_repeat('i', count($categoryIds));
+            $sql = "SELECT id FROM job_categories WHERE id IN ($placeholders)";
+            $stmt = $this->conn->prepare($sql);
+            if ($stmt === false) {
+                return false;
+            }
+            $stmt->bind_param($types, ...$categoryIds);
+            if ($stmt->execute()) {
+                $result = $stmt->get_result();
+                if ($result) {
+                    while ($row = $result->fetch_assoc()) {
+                        $id = (int)($row['id'] ?? 0);
+                        if ($id > 0) {
+                            $validIds[] = $id;
+                        }
+                    }
+                    $result->free();
+                }
+            }
+            $stmt->close();
+        }
+
+        $deleteStmt = $this->conn->prepare("DELETE FROM job_category_map WHERE job_id = ?");
+        if ($deleteStmt === false) {
+            return false;
+        }
+        $deleteStmt->bind_param('i', $jobId);
+        $deleteStmt->execute();
+        $deleteStmt->close();
+
+        if (empty($validIds)) {
+            return true;
+        }
+
+        $insertStmt = $this->conn->prepare("INSERT INTO job_category_map (job_id, category_id) VALUES (?, ?)");
+        if ($insertStmt === false) {
+            return false;
+        }
+        $jobIdParam = $jobId;
+        $categoryIdParam = 0;
+        $insertStmt->bind_param('ii', $jobIdParam, $categoryIdParam);
+        foreach ($validIds as $categoryId) {
+            $categoryIdParam = $categoryId;
+            if (!$insertStmt->execute()) {
+                $insertStmt->close();
+                return false;
+            }
+        }
+        $insertStmt->close();
+        return true;
+    }
+
+    public function update($job_id, $employer_id, $title, $description, $jobRequirements = null, $location = null, $salary = null, $employment_type = null, $status = 'draft', $quantity = null, $deadline = null) {
         $status = in_array($status, $this->allowedStatuses, true) ? $status : 'draft';
-        $sql = "UPDATE jobs SET title = ?, description = ?, location = ?, salary = ?, employment_type = ?, status = ?, updated_at = NOW() WHERE id = ? AND employer_id = ?";
+        $location = $this->normalizeOptionalString($location);
+        $salary = $this->normalizeOptionalString($salary);
+        $employment_type = $this->normalizeOptionalString($employment_type);
+        $quantity = $this->normalizeQuantity($quantity);
+        $deadline = $this->normalizeDeadline($deadline);
+        $jobRequirements = $this->normalizeLongText($jobRequirements);
+
+        $sql = "UPDATE jobs SET title = ?, description = ?, job_requirements = ?, location = ?, salary = ?, employment_type = ?, status = ?, quantity = ?, deadline = ?, updated_at = NOW() WHERE id = ? AND employer_id = ?";
         $stmt = $this->conn->prepare($sql);
         if ($stmt === false) {
             return false;
         }
-        $stmt->bind_param("ssssssii", $title, $description, $location, $salary, $employment_type, $status, $job_id, $employer_id);
+        $stmt->bind_param(
+            'sssssssisii',
+            $title,
+            $description,
+            $jobRequirements,
+            $location,
+            $salary,
+            $employment_type,
+            $status,
+            $quantity,
+            $deadline,
+            $job_id,
+            $employer_id
+        );
         $result = $stmt->execute();
         $stmt->close();
         return $result;
@@ -280,7 +549,7 @@ class Job extends Database {
     }
 
     public function countPublished() {
-        $sql = "SELECT COUNT(*) AS total FROM jobs WHERE status = 'published'";
+        $sql = "SELECT COUNT(*) AS total FROM jobs WHERE status = 'published' AND (deadline IS NULL OR deadline >= CURDATE())";
         $result = $this->conn->query($sql);
         if ($result && ($row = $result->fetch_assoc())) {
             return (int)$row['total'];
@@ -290,11 +559,11 @@ class Job extends Database {
 
     public function getFeaturedJobs($limit = 8) {
         $limit = max(1, (int)$limit);
-        $sql = "SELECT j.id, j.title, j.location, j.salary, j.employment_type, j.created_at,
+        $sql = "SELECT j.id, j.title, j.location, j.salary, j.employment_type, j.quantity, j.deadline, j.created_at,
                        e.company_name
                 FROM jobs j
                 INNER JOIN employers e ON e.id = j.employer_id
-                WHERE j.status = 'published'
+                WHERE j.status = 'published' AND (j.deadline IS NULL OR j.deadline >= CURDATE())
                 ORDER BY j.created_at DESC
                 LIMIT $limit";
         $result = $this->conn->query($sql);
@@ -388,6 +657,8 @@ class Job extends Database {
                     j.location,
                     j.salary,
                     j.employment_type,
+                    j.quantity,
+                    j.deadline,
                     j.created_at,
                     e.company_name,
                     e.logo_path,
@@ -400,6 +671,7 @@ class Job extends Database {
         $conditions = [];
         if ($publishedOnly) {
             $conditions[] = "j.status = 'published'";
+            $conditions[] = "(j.deadline IS NULL OR j.deadline >= CURDATE())";
         }
         if ($employerId > 0) {
             $conditions[] = 'j.employer_id = ?';
@@ -419,8 +691,8 @@ class Job extends Database {
             $sql .= ' WHERE ' . implode(' AND ', $conditions);
         }
 
-        $sql .= "
-                GROUP BY j.id, j.title, j.location, j.salary, j.employment_type, j.created_at, e.company_name, e.logo_path
+    $sql .= "
+        GROUP BY j.id, j.title, j.location, j.salary, j.employment_type, j.quantity, j.deadline, j.created_at, e.company_name, e.logo_path
                 ORDER BY view_count DESC, last_viewed_at DESC, j.created_at DESC
                 LIMIT ?";
 
@@ -465,14 +737,16 @@ class Job extends Database {
                     j.location,
                     j.salary,
                     j.employment_type,
+                    j.quantity,
+                    j.deadline,
                     j.created_at,
                     j.updated_at,
                     COUNT(v.id) AS view_count,
                     MAX(v.viewed_at) AS last_viewed_at
                 FROM jobs j
                 LEFT JOIN job_views v ON v.job_id = j.id
-                WHERE j.employer_id = ? AND j.status = 'published'
-                GROUP BY j.id, j.title, j.location, j.salary, j.employment_type, j.created_at, j.updated_at
+                WHERE j.employer_id = ? AND j.status = 'published' AND (j.deadline IS NULL OR j.deadline >= CURDATE())
+                GROUP BY j.id, j.title, j.location, j.salary, j.employment_type, j.quantity, j.deadline, j.created_at, j.updated_at
                 ORDER BY COALESCE(j.updated_at, j.created_at) DESC, j.created_at DESC";
 
         $types = 'i';

@@ -62,6 +62,7 @@
   </div>
 </footer>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="<?= ASSETS_URL ?>/js/form-validation.js" defer></script>
 <?php
 if (!empty($additionalScripts)) {
   foreach ($additionalScripts as $scriptTag) {
@@ -69,5 +70,10 @@ if (!empty($additionalScripts)) {
   }
 }
 ?>
+<script>
+window.addEventListener('load', function () {
+  document.body.classList.add('page-loaded');
+});
+</script>
 </body>
 </html>

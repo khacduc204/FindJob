@@ -309,6 +309,9 @@ ob_start();
                       <a href="mailto:<?= htmlspecialchars($candidate['email']) ?>" class="btn btn-sm btn-outline-success" title="Gửi email">
                         <i class="bi bi-envelope"></i>
                       </a>
+                      <a href="/JobFind/admin/candidates/delete_candidate.php?user_id=<?= (int)$candidate['user_id'] ?>" class="btn btn-sm btn-outline-danger" title="Xóa ứng viên">
+                        <i class="bi bi-trash"></i>
+                      </a>
                     </div>
                   </td>
                 </tr>

@@ -20,6 +20,15 @@ if (!$employer) {
     exit;
 }
 
+$categoryOptions = $jobController->getCategories();
+$categoryLookup = [];
+foreach ($categoryOptions as $categoryOption) {
+    $categoryId = (int)($categoryOption['id'] ?? 0);
+    if ($categoryId > 0) {
+        $categoryLookup[$categoryId] = $categoryOption;
+    }
+}
+
 $errors = [];
 $values = [
   'title' => '',
@@ -27,7 +36,11 @@ $values = [
   'salary' => '',
   'employment_type' => 'Full-time',
   'status' => 'draft',
-  'description' => ''
+  'description' => '',
+  'job_requirements' => '',
+  'quantity' => '',
+  'deadline' => '',
+  'categories' => []
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -36,6 +49,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $values['salary'] = trim($_POST['salary'] ?? '');
     $values['employment_type'] = trim($_POST['employment_type'] ?? 'Full-time');
     $values['description'] = trim($_POST['description'] ?? '');
+  $values['job_requirements'] = trim($_POST['job_requirements'] ?? '');
+  $values['quantity'] = trim($_POST['quantity'] ?? '');
+  $values['deadline'] = trim($_POST['deadline'] ?? '');
+
+  $selectedCategoryIds = [];
+  $rawCategories = $_POST['categories'] ?? [];
+  if (is_array($rawCategories)) {
+    foreach ($rawCategories as $categoryId) {
+      $categoryId = (int)$categoryId;
+      if ($categoryId > 0 && isset($categoryLookup[$categoryId])) {
+        $selectedCategoryIds[] = $categoryId;
+      }
+    }
+  }
+  $values['categories'] = array_values(array_unique($selectedCategoryIds));
 
     if ($values['title'] === '') {
         $errors['title'] = 'Vui lòng nhập tiêu đề tin tuyển dụng.';
@@ -43,18 +71,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($values['description'] === '') {
         $errors['description'] = 'Vui lòng mô tả chi tiết công việc.';
     }
+  if ($values['job_requirements'] === '') {
+    $errors['job_requirements'] = 'Vui lòng mô tả yêu cầu đối với ứng viên.';
+  }
+
+  if ($values['quantity'] !== '') {
+    if (!ctype_digit($values['quantity']) || (int)$values['quantity'] <= 0) {
+      $errors['quantity'] = 'Số lượng cần tuyển phải là số nguyên dương.';
+    }
+  }
+
+  if ($values['deadline'] !== '') {
+    $deadlineDate = \DateTime::createFromFormat('Y-m-d', $values['deadline']);
+    $deadlineValid = $deadlineDate && $deadlineDate->format('Y-m-d') === $values['deadline'];
+    if (!$deadlineValid) {
+      $errors['deadline'] = 'Vui lòng nhập thời hạn đúng định dạng YYYY-MM-DD.';
+    }
+  }
 
     $values['status'] = 'draft';
+
+  if (empty($values['categories'])) {
+    $errors['categories'] = 'Vui lòng chọn ít nhất một ngành nghề phù hợp.';
+  }
 
     if (empty($errors)) {
         $jobId = $jobController->createJob(
             (int)$userId,
             $values['title'],
             $values['description'],
+      $values['job_requirements'] !== '' ? $values['job_requirements'] : null,
             $values['location'] !== '' ? $values['location'] : null,
             $values['salary'] !== '' ? $values['salary'] : null,
             $values['employment_type'] !== '' ? $values['employment_type'] : null,
-            'draft'
+      'draft',
+      $values['quantity'] !== '' ? (int)$values['quantity'] : null,
+      $values['deadline'] !== '' ? $values['deadline'] : null,
+      $values['categories']
         );
 
         if ($jobId) {
@@ -126,12 +179,51 @@ $employmentOptions = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freel
             <?php endforeach; ?>
           </select>
         </div>
+        <div class="col-md-3">
+          <label for="jobQuantity" class="form-label">Số lượng cần tuyển</label>
+          <input type="number" id="jobQuantity" name="quantity" class="form-control <?= isset($errors['quantity']) ? 'is-invalid' : '' ?>" value="<?= htmlspecialchars($values['quantity']) ?>" min="1" placeholder="Ví dụ: 3">
+          <?php if (isset($errors['quantity'])) : ?><div class="invalid-feedback"><?= htmlspecialchars($errors['quantity']) ?></div><?php endif; ?>
+        </div>
+        <div class="col-md-3">
+          <label for="jobDeadline" class="form-label">Hạn nộp hồ sơ</label>
+          <input type="date" id="jobDeadline" name="deadline" class="form-control <?= isset($errors['deadline']) ? 'is-invalid' : '' ?>" value="<?= htmlspecialchars($values['deadline']) ?>">
+          <?php if (isset($errors['deadline'])) : ?><div class="invalid-feedback"><?= htmlspecialchars($errors['deadline']) ?></div><?php endif; ?>
+        </div>
       </div>
 
       <div class="mt-3">
         <label for="jobDescription" class="form-label">Mô tả công việc<span class="text-danger">*</span></label>
         <textarea id="jobDescription" name="description" rows="8" class="form-control <?= isset($errors['description']) ? 'is-invalid' : '' ?>" placeholder="Nêu rõ trách nhiệm, yêu cầu và quyền lợi của vị trí."><?= htmlspecialchars($values['description']) ?></textarea>
         <?php if (isset($errors['description'])) : ?><div class="invalid-feedback"><?= htmlspecialchars($errors['description']) ?></div><?php endif; ?>
+      </div>
+
+      <div class="mt-3">
+        <label for="jobRequirements" class="form-label">Yêu cầu ứng viên<span class="text-danger">*</span></label>
+        <textarea id="jobRequirements" name="job_requirements" rows="6" class="form-control <?= isset($errors['job_requirements']) ? 'is-invalid' : '' ?>" placeholder="Liệt kê kỹ năng, kinh nghiệm tối thiểu, chứng chỉ bắt buộc và tố chất cần có."><?= htmlspecialchars($values['job_requirements']) ?></textarea>
+        <?php if (isset($errors['job_requirements'])) : ?><div class="invalid-feedback"><?= htmlspecialchars($errors['job_requirements']) ?></div><?php endif; ?>
+        <div class="form-text">Ví dụ: 2+ năm kinh nghiệm PHP/Laravel, khả năng đọc hiểu tài liệu tiếng Anh, ưu tiên từng làm việc với REST API.</div>
+      </div>
+
+      <div class="mt-4">
+        <label class="form-label">Ngành nghề tuyển dụng<span class="text-danger">*</span></label>
+        <?php if (empty($categoryOptions)) : ?>
+          <div class="alert alert-warning mb-0">Hiện chưa có danh sách ngành nghề. Vui lòng liên hệ quản trị viên để được hỗ trợ.</div>
+        <?php else : ?>
+          <div class="row g-2">
+            <?php foreach ($categoryOptions as $category) : ?>
+              <?php $categoryId = (int)($category['id'] ?? 0); ?>
+              <?php if ($categoryId <= 0) { continue; } ?>
+              <div class="col-sm-6 col-lg-4">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="categories[]" id="category_<?= $categoryId ?>" value="<?= $categoryId ?>" <?= in_array($categoryId, $values['categories'], true) ? 'checked' : '' ?>>
+                  <label class="form-check-label" for="category_<?= $categoryId ?>"><?= htmlspecialchars($category['name'] ?? ('Ngành nghề #' . $categoryId)) ?></label>
+                </div>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        <?php endif; ?>
+        <?php if (isset($errors['categories'])) : ?><div class="invalid-feedback d-block"><?= htmlspecialchars($errors['categories']) ?></div><?php endif; ?>
+        <div class="form-text">Chọn 1-3 ngành nghề mô tả chính xác vị trí đang tuyển.</div>
       </div>
     </div>
     <div class="card-footer bg-white d-flex justify-content-end gap-2 p-3">

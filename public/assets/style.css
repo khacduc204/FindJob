@@ -277,7 +277,7 @@ a:hover {
 	background: radial-gradient(90% 120% at 20% 20%, rgba(0, 177, 79, 0.95), rgba(0, 133, 202, 0.9));
 	padding: 4.5rem 0 5.5rem;
 	position: relative;
-	overflow: hidden;
+	overflow: auto;
 }
 
 .jf-hero::after {
@@ -325,7 +325,7 @@ a:hover {
 
 .jf-hero-thumb {
 	border-radius: 28px;
-	overflow: hidden;
+	overflow: auto;
 	position: relative;
 	background: #fff;
 }
@@ -578,7 +578,7 @@ a:hover {
 
 .auth-card {
 	border-radius: 32px;
-	overflow: hidden;
+	overflow: auto;
 	background: #fff;
 	max-width: 960px;
 	margin: 0 auto;
@@ -964,7 +964,7 @@ a:hover {
 	cursor: pointer;
 	box-shadow: 0 4px 12px rgba(0,177,79,0.3);
 	opacity: 0;
-	visibility: hidden;
+	visibility: auto;
 	transform: translateY(20px);
 	transition: all 0.3s ease;
 	z-index: 999;
@@ -984,7 +984,7 @@ a:hover {
 
 /* Loading state */
 body:not(.page-loaded) {
-	overflow: hidden;
+	overflow-y: auto;
 }
 
 body.page-loaded .jf-hero {
@@ -1010,7 +1010,7 @@ img.loaded {
 .jf-brand-card,
 .jf-blog-card {
 	position: relative;
-	overflow: hidden;
+	overflow: auto;
 }
 
 .jf-category-card::before,

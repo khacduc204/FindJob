@@ -2,7 +2,7 @@
   <ul class="sidebar-nav" id="sidebar-nav">
 
     <li class="nav-item">
-      <a class="nav-link" href="/JobFind/admin/index.php">
+      <a class="nav-link" href="/JobFind/admin/dashboard.php">
         <i class="bi bi-grid"></i>
         <span>Bảng điều khiển</span>
       </a>

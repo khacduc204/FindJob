@@ -109,6 +109,8 @@ if ($jobShareFlash) {
 }
 
 $currentUri = $_SERVER['REQUEST_URI'] ?? BASE_URL . '/index.php';
+$prefilledKeyword = trim((string)($_GET['keyword'] ?? ''));
+$prefilledLocation = trim((string)($_GET['location'] ?? ''));
 
 $pageTitle = 'JobFind - Nền tảng việc làm chuẩn TopCV';
 $bodyClass = 'home-page';
@@ -137,21 +139,21 @@ require_once __DIR__ . '/includes/header.php';
             <h1 class="hero-title">Tìm việc nhanh 24h &ndash; Chạm gần hơn với công việc mơ ước</h1>
             <p class="hero-subtitle">Hàng nghìn cơ hội mới từ các doanh nghiệp uy tín được cập nhật mỗi ngày. JobFind đồng hành cùng bạn trên hành trình sự nghiệp chuyên nghiệp.</p>
             <div class="home-search-card jf-search-card">
-              <form class="row g-3 home-search-form" data-search-url="<?= BASE_URL ?>/jobs.php">
+              <form class="row g-3 home-search-form" method="get" action="<?= BASE_URL ?>/job/share/index.php" data-search-url="<?= BASE_URL ?>/job/share/index.php">
                 <div class="col-lg-5">
                   <div class="form-floating">
-                    <input type="text" class="form-control" id="keyword" placeholder="Vị trí, kỹ năng, công ty">
+                    <input type="text" class="form-control" id="keyword" name="keyword" placeholder="Vị trí, kỹ năng, công ty" value="<?= htmlspecialchars($prefilledKeyword) ?>">
                     <label for="keyword"><i class="fa-solid fa-magnifying-glass me-2 text-success"></i>Vị trí, kỹ năng, công ty</label>
                   </div>
                 </div>
                 <div class="col-lg-4">
                   <div class="form-floating">
-                    <select class="form-select" id="location">
-                      <option value="">Toàn quốc</option>
-                      <option value="hn">Hà Nội</option>
-                      <option value="hcm">TP. Hồ Chí Minh</option>
-                      <option value="dn">Đà Nẵng</option>
-                      <option value="remote">Remote</option>
+                    <select class="form-select" id="location" name="location">
+                      <option value="" <?= $prefilledLocation === '' ? 'selected' : '' ?>>Toàn quốc</option>
+                      <option value="Hà Nội" <?= $prefilledLocation === 'Hà Nội' ? 'selected' : '' ?>>Hà Nội</option>
+                      <option value="TP. Hồ Chí Minh" <?= $prefilledLocation === 'TP. Hồ Chí Minh' ? 'selected' : '' ?>>TP. Hồ Chí Minh</option>
+                      <option value="Đà Nẵng" <?= $prefilledLocation === 'Đà Nẵng' ? 'selected' : '' ?>>Đà Nẵng</option>
+                      <option value="Remote" <?= $prefilledLocation === 'Remote' ? 'selected' : '' ?>>Remote</option>
                     </select>
                     <label for="location"><i class="fa-solid fa-location-dot me-2 text-success"></i>Địa điểm</label>
                   </div>
@@ -166,7 +168,7 @@ require_once __DIR__ . '/includes/header.php';
               <div class="home-search-tags">
                 <span class="tag-label">Từ khóa nổi bật:</span>
                 <?php foreach (array_slice($searchKeywords, 0, 4) as $keyword): ?>
-                  <a href="#" class="badge">#<?= htmlspecialchars($keyword) ?></a>
+                  <a href="<?= BASE_URL ?>/job/share/index.php?keyword=<?= urlencode($keyword) ?>" class="badge">#<?= htmlspecialchars($keyword) ?></a>
                 <?php endforeach; ?>
               </div>
             </div>
@@ -256,7 +258,7 @@ require_once __DIR__ . '/includes/header.php';
         <?php if (!empty($topCategories)): ?>
           <?php foreach ($topCategories as $cat): ?>
             <div class="col-xl-4 col-md-6">
-              <a class="jf-category-card fade-in-element" href="<?= BASE_URL ?>/jobs.php?category=<?= urlencode($cat['name']) ?>">
+              <a class="jf-category-card fade-in-element" href="<?= BASE_URL ?>/job/share/index.php?category=<?= (int)($cat['id'] ?? 0) ?>">
                 <div class="icon"><i class="fa-solid <?= jf_category_icon($cat['name']) ?>"></i></div>
                 <div>
                   <h5><?= htmlspecialchars($cat['name']) ?></h5>

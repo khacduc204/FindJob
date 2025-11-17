@@ -12,6 +12,11 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role_id'] != 1) {
 $userModel = new User();
 $queryError = null;
 
+$userFlash = $_SESSION['admin_user_flash'] ?? null;
+if (isset($_SESSION['admin_user_flash'])) {
+  unset($_SESSION['admin_user_flash']);
+}
+
 // Đổi vai trò nhanh (qua GET)
 if (isset($_GET['set_role']) && isset($_GET['user_id'])) {
     $uid = (int)$_GET['user_id'];
@@ -58,6 +63,13 @@ ob_start();
 
 <section class="section">
   <div class="card p-3 shadow-sm">
+
+    <?php if ($userFlash): ?>
+      <div class="alert alert-<?= htmlspecialchars($userFlash['type'] ?? 'info') ?> alert-dismissible fade show" role="alert">
+        <?= htmlspecialchars($userFlash['message'] ?? '') ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Đóng"></button>
+      </div>
+    <?php endif; ?>
 
     <?php if ($queryError): ?>
       <div class="alert alert-danger">

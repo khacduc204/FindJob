@@ -4,6 +4,14 @@ require_once dirname(__DIR__, 3) . '/app/models/Job.php';
 require_once dirname(__DIR__, 3) . '/app/models/SavedJob.php';
 
 $jobModel = new Job();
+$categoryOptions = $jobModel->getAllCategories();
+$categoryLookup = [];
+foreach ($categoryOptions as $categoryOption) {
+  $categoryId = (int)($categoryOption['id'] ?? 0);
+  if ($categoryId > 0) {
+    $categoryLookup[$categoryId] = $categoryOption;
+  }
+}
 
 $userId = (int)($_SESSION['user_id'] ?? 0);
 $userRole = (int)($_SESSION['role_id'] ?? 0);
@@ -14,8 +22,13 @@ $savedJobIds = $canSaveJobs ? $savedJobModel->getSavedJobIdsForUser($userId) : [
 $filters = [
     'keyword' => trim($_GET['keyword'] ?? ''),
     'location' => trim($_GET['location'] ?? ''),
-    'employment_type' => trim($_GET['type'] ?? '')
+  'employment_type' => trim($_GET['type'] ?? ''),
+  'category' => (int)($_GET['category'] ?? 0)
 ];
+
+if ($filters['category'] > 0 && !isset($categoryLookup[$filters['category']])) {
+  $filters['category'] = 0;
+}
 
 $allowedTypes = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freelance'];
 if ($filters['employment_type'] !== '' && !in_array($filters['employment_type'], $allowedTypes, true)) {
@@ -41,7 +54,7 @@ $jobs = [];
 $queryError = null;
 $totalJobs = 0;
 
-$conditions = ["j.status = 'published'"];
+$conditions = ["j.status = 'published'", "(j.deadline IS NULL OR j.deadline >= CURDATE())"];
 $params = [];
 $types = '';
 
@@ -66,6 +79,12 @@ if ($filters['employment_type'] !== '') {
   $conditions[] = 'j.employment_type = ?';
   $params[] = $filters['employment_type'];
   $types .= 's';
+}
+
+if ($filters['category'] > 0) {
+  $conditions[] = 'EXISTS (SELECT 1 FROM job_category_map m WHERE m.job_id = j.id AND m.category_id = ?)';
+  $params[] = $filters['category'];
+  $types .= 'i';
 }
 
 if ($showSaved && !empty($savedJobIds)) {
@@ -114,7 +133,7 @@ if ($showSaved && empty($savedJobIds)) {
   }
   $offset = ($page - 1) * $perPage;
 
-  $dataSql = "SELECT j.id, j.title, j.location, j.salary, j.employment_type, j.created_at,
+  $dataSql = "SELECT j.id, j.title, j.location, j.salary, j.employment_type, j.quantity, j.deadline, j.created_at,
              e.company_name, e.logo_path
         FROM jobs j
         INNER JOIN employers e ON e.id = j.employer_id
@@ -148,6 +167,17 @@ if ($showSaved && empty($savedJobIds)) {
 }
 
 $displayedJobs = count($jobs);
+$jobCategoryMap = [];
+if (!empty($jobs)) {
+  $jobIds = [];
+  foreach ($jobs as $jobRow) {
+    $jobIds[] = (int)($jobRow['id'] ?? 0);
+  }
+  $jobIds = array_values(array_filter(array_unique($jobIds)));
+  if (!empty($jobIds)) {
+    $jobCategoryMap = $jobModel->getCategoriesForJobs($jobIds);
+  }
+}
 $locationSuggestion = '';
 if ($filters['location'] === '' && $displayedJobs > 0) {
     $cityCounts = [];
@@ -165,7 +195,7 @@ if ($filters['location'] === '' && $displayedJobs > 0) {
 
 $fullTimeCount = count(array_filter($jobs, static fn($job) => ($job['employment_type'] ?? '') === 'Full-time'));
 $remoteCount = count(array_filter($jobs, static fn($job) => stripos((string)($job['location'] ?? ''), 'remote') !== false));
-$hasFilters = $filters['keyword'] !== '' || $filters['location'] !== '' || $filters['employment_type'] !== '';
+$hasFilters = $filters['keyword'] !== '' || $filters['location'] !== '' || $filters['employment_type'] !== '' || $filters['category'] > 0;
 
 $jobShareFlash = $_SESSION['job_share_flash'] ?? null;
 if ($jobShareFlash) {
@@ -265,6 +295,17 @@ require_once dirname(__DIR__, 2) . '/includes/header.php';
                 <?php endif; ?>
               </div>
               <div class="mb-3">
+                <label class="form-label" for="category">Ngành nghề</label>
+                <select id="category" name="category" class="form-select">
+                  <option value="0" <?= $filters['category'] === 0 ? 'selected' : '' ?>>Tất cả</option>
+                  <?php foreach ($categoryOptions as $category): ?>
+                    <?php $categoryId = (int)($category['id'] ?? 0); ?>
+                    <?php if ($categoryId <= 0) { continue; } ?>
+                    <option value="<?= $categoryId ?>" <?= $filters['category'] === $categoryId ? 'selected' : '' ?>><?= htmlspecialchars($category['name'] ?? ('Ngành nghề #' . $categoryId)) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div class="mb-3">
                 <label class="form-label" for="type">Hình thức làm việc</label>
                 <select id="type" name="type" class="form-select">
                   <option value="">Tất cả</option>
@@ -340,19 +381,15 @@ require_once dirname(__DIR__, 2) . '/includes/header.php';
                 $postedAgo = jf_job_time_ago($job['created_at'] ?? null);
                 $jobId = (int)$job['id'];
                 $isSaved = $canSaveJobs && in_array($jobId, $savedJobIds, true);
+                $deadlineDate = $job['deadline'] ? date('d/m/Y', strtotime($job['deadline'])) : null;
+                $jobCategories = $jobCategoryMap[$jobId] ?? [];
               ?>
               <div class="col">
                 <article class="card shadow-sm border-0 h-100">
                   <div class="card-body p-4">
                     <div class="d-flex align-items-start justify-content-between mb-3">
                       <div class="d-flex align-items-center gap-3">
-                        <div class="job-logo">
-                          <?php if ($logoUrl !== ''): ?>
-                            <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($companyName) ?>">
-                          <?php else: ?>
-                            <span class="job-logo-fallback"><?= htmlspecialchars(strtoupper(substr($companyName, 0, 2))) ?></span>
-                          <?php endif; ?>
-                        </div>
+                        
                         <div>
                           <h3 class="h5 mb-1">
                             <a href="<?= BASE_URL ?>/job/share/view.php?id=<?= $jobId ?>" class="text-decoration-none"><?= htmlspecialchars($job['title']) ?></a>
@@ -381,6 +418,17 @@ require_once dirname(__DIR__, 2) . '/includes/header.php';
                       <div><i class="fa-solid fa-location-dot me-2 text-success"></i><?= htmlspecialchars($location) ?></div>
                       <div><i class="fa-solid fa-coins me-2 text-success"></i><?= htmlspecialchars($salary) ?></div>
                       <div><i class="fa-solid fa-suitcase me-2 text-success"></i><?= htmlspecialchars($employmentType) ?></div>
+                    </div>
+                    <?php if (!empty($jobCategories)): ?>
+                      <div class="d-flex flex-wrap gap-2 mb-3">
+                        <?php foreach ($jobCategories as $category): ?>
+                          <span class="badge bg-success bg-opacity-10 text-success border border-success"><?= htmlspecialchars($category['name']) ?></span>
+                        <?php endforeach; ?>
+                      </div>
+                    <?php endif; ?>
+                    <div class="d-flex flex-wrap gap-3 small text-muted mb-3">
+                      <span><i class="fa-solid fa-users me-2 text-success"></i><?= $job['quantity'] ? (int)$job['quantity'] . ' vị trí' : 'Không giới hạn' ?></span>
+                      <span><i class="fa-solid fa-calendar-day me-2 text-success"></i><?= $deadlineDate ? 'Hạn ' . htmlspecialchars($deadlineDate) : 'Hạn nộp linh hoạt' ?></span>
                     </div>
                     <div class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between">
                       <span class="badge bg-light text-dark"><?= htmlspecialchars($postedAgo) ?></span>

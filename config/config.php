@@ -29,4 +29,12 @@ define('AVATAR_ALLOWED_MIME', serialize(['image/png','image/jpeg','image/gif','i
 define('AVATAR_MAX_WIDTH', 800);
 define('AVATAR_MAX_HEIGHT', 800);
 define('AVATAR_THUMB_SIZE', 96);
+
+// Company logo upload configuration
+define('COMPANY_LOGO_UPLOAD_DIR', 'uploads/company-logos');
+define('COMPANY_LOGO_UPLOAD_PATH', __DIR__ . '/../public/' . COMPANY_LOGO_UPLOAD_DIR);
+define('COMPANY_LOGO_MAX_SIZE', 3 * 1024 * 1024); // 3 MB
+define('COMPANY_LOGO_ALLOWED_MIME', serialize(['image/png','image/jpeg','image/gif','image/webp','image/pjpeg','image/jpg']));
+define('COMPANY_LOGO_MAX_WIDTH', 600);
+define('COMPANY_LOGO_MAX_HEIGHT', 600);
 ?>

@@ -27,6 +27,18 @@ if (empty($hotJobs)) {
     $hotJobs = $jobModel->getFeaturedJobs(24);
 }
 
+$hotJobCategoryMap = [];
+if (!empty($hotJobs)) {
+  $jobIds = [];
+  foreach ($hotJobs as $jobRow) {
+    $jobIds[] = (int)($jobRow['id'] ?? 0);
+  }
+  $jobIds = array_values(array_filter(array_unique($jobIds)));
+  if (!empty($jobIds)) {
+    $hotJobCategoryMap = $jobModel->getCategoriesForJobs($jobIds);
+  }
+}
+
 $jobShareFlash = $_SESSION['job_share_flash'] ?? null;
 if ($jobShareFlash) {
     unset($_SESSION['job_share_flash']);
@@ -124,6 +136,8 @@ require_once dirname(__DIR__, 2) . '/includes/header.php';
             $lastViewed = $viewCount > 0 ? jf_hot_job_time_ago($job['last_viewed_at'] ?? null) : jf_hot_job_time_ago($job['created_at'] ?? null);
             $jobId = (int)$job['id'];
             $isSaved = $canSaveJobs && in_array($jobId, $savedJobIds, true);
+            $deadlineLabel = $job['deadline'] ? date('d/m/Y', strtotime($job['deadline'])) : null;
+            $jobCategories = $hotJobCategoryMap[$jobId] ?? [];
           ?>
           <div class="col">
             <article class="card shadow-sm border-0 h-100">
@@ -166,10 +180,23 @@ require_once dirname(__DIR__, 2) . '/includes/header.php';
                   <div><i class="fa-solid fa-coins me-2 text-success"></i><?= htmlspecialchars($salary) ?></div>
                   <div><i class="fa-solid fa-suitcase me-2 text-success"></i><?= htmlspecialchars($employmentType) ?></div>
                 </div>
+                <?php if (!empty($jobCategories)): ?>
+                  <div class="d-flex flex-wrap gap-2 mb-3">
+                    <?php foreach ($jobCategories as $category): ?>
+                      <span class="badge bg-success bg-opacity-10 text-success border border-success"><?= htmlspecialchars($category['name']) ?></span>
+                    <?php endforeach; ?>
+                  </div>
+                <?php endif; ?>
                 <div class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between">
-                  <div class="d-flex align-items-center gap-2 text-muted">
-                    <span class="badge bg-success bg-opacity-10 text-success">Lượt xem: <?= number_format($viewCount) ?></span>
-                    <span class="small">Gần nhất: <?= htmlspecialchars($lastViewed) ?></span>
+                  <div class="d-flex flex-column flex-md-row gap-2 text-muted">
+                    <div class="d-flex align-items-center gap-2">
+                      <span class="badge bg-success bg-opacity-10 text-success">Lượt xem: <?= number_format($viewCount) ?></span>
+                      <span class="small">Gần nhất: <?= htmlspecialchars($lastViewed) ?></span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                      <span class="small"><i class="fa-solid fa-users me-2 text-success"></i><?= $job['quantity'] ? (int)$job['quantity'] . ' vị trí' : 'Không giới hạn vị trí' ?></span>
+                      <span class="small"><i class="fa-solid fa-calendar-day me-2 text-success"></i><?= $deadlineLabel ? 'Hạn ' . htmlspecialchars($deadlineLabel) : 'Hạn nộp linh hoạt' ?></span>
+                    </div>
                   </div>
                   <a href="<?= BASE_URL ?>/job/share/view.php?id=<?= $jobId ?>" class="btn btn-outline-success mt-3 mt-sm-0">
                     Xem chi tiết

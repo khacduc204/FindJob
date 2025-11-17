@@ -33,6 +33,8 @@ $userRole = (int)($_SESSION['role_id'] ?? 0);
 $canSaveJobs = $userId > 0 && $userRole === 3;
 $savedJobModel = $canSaveJobs ? new SavedJob() : null;
 $savedJobIds = $canSaveJobs ? $savedJobModel->getSavedJobIdsForUser($userId) : [];
+$isOwner = $userId > 0 && $userRole === 2 && (int)$employer['user_id'] === $userId;
+$profileUpdated = isset($_GET['updated']);
 
 $companyName = $employer['company_name'] ?? 'Nhà tuyển dụng JobFind';
 $companyAbout = trim((string)($employer['about'] ?? ''));
@@ -71,6 +73,20 @@ $uniqueLocations = array_keys($jobLocations);
 sort($uniqueLocations, SORT_NATURAL | SORT_FLAG_CASE);
 
 $activityLabel = $latestActivity ? date('d/m/Y', $latestActivity) : 'Đang cập nhật';
+
+if (!function_exists('jf_profile_map_embed_url')) {
+  function jf_profile_map_embed_url(?string $address): ?string {
+    $address = trim((string)$address);
+    if ($address === '') {
+      return null;
+    }
+    $query = rawurlencode($address);
+    return 'https://www.google.com/maps?q=' . $query . '&output=embed';
+  }
+}
+
+$primaryMapAddress = $companyAddress !== '' ? $companyAddress : ($uniqueLocations[0] ?? '');
+$companyMapEmbedUrl = jf_profile_map_embed_url($primaryMapAddress);
 
 $benefits = jf_profile_get_benefits($employer);
 $cultureHighlights = jf_profile_get_culture_highlights($companyName, $totalJobs, $recentJobs, $uniqueLocations, $totalViews);
@@ -282,9 +298,19 @@ $currentUri = $_SERVER['REQUEST_URI'] ?? (BASE_URL . '/employer/show.php?id=' . 
             <?php if ($companyWebsite !== ''): ?>
               <a class="btn btn-outline-success" href="<?= htmlspecialchars($companyWebsite) ?>" target="_blank" rel="noopener">Ghé thăm website</a>
             <?php endif; ?>
+            <?php if ($isOwner): ?>
+              <a class="btn btn-outline-secondary" href="<?= BASE_URL ?>/employer/edit.php">
+                <i class="fa-solid fa-pen-to-square me-2"></i>Chỉnh sửa hồ sơ
+              </a>
+            <?php endif; ?>
           </div>
         </div>
       </div>
+      <?php if ($profileUpdated): ?>
+        <div class="alert alert-success mt-4 shadow-sm" role="alert">
+          <i class="fa-solid fa-circle-check me-2"></i>Thông tin doanh nghiệp đã được cập nhật thành công.
+        </div>
+      <?php endif; ?>
     </div>
   </section>
 
@@ -349,6 +375,23 @@ $currentUri = $_SERVER['REQUEST_URI'] ?? (BASE_URL . '/employer/show.php?id=' . 
               <li><i class="fa-solid fa-globe"></i><a href="<?= htmlspecialchars($companyWebsite) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($companyWebsite) ?></a></li>
             <?php endif; ?>
           </ul>
+          <?php if ($companyMapEmbedUrl): ?>
+            <div class="ratio ratio-16x9 mt-4">
+              <iframe
+                src="<?= htmlspecialchars($companyMapEmbedUrl) ?>"
+                allowfullscreen
+                loading="lazy"
+                referrerpolicy="no-referrer-when-downgrade"
+                aria-label="Bản đồ vị trí doanh nghiệp"
+                style="border:0;"
+              ></iframe>
+            </div>
+            <?php if ($primaryMapAddress !== ''): ?>
+              <p class="small text-muted mt-2 mb-0">
+                <i class="fa-solid fa-location-dot me-2"></i><?= htmlspecialchars($primaryMapAddress) ?>
+              </p>
+            <?php endif; ?>
+          <?php endif; ?>
           <?php if (!empty($uniqueLocations)): ?>
             <div class="mt-4">
               <h3 class="h6 text-uppercase text-muted">Đang tuyển tại</h3>
@@ -459,6 +502,8 @@ $currentUri = $_SERVER['REQUEST_URI'] ?? (BASE_URL . '/employer/show.php?id=' . 
                 $jobPosted = strtotime($job['created_at'] ?? '') ?: null;
                 $postedLabel = $jobPosted ? date('d/m/Y', $jobPosted) : 'Chưa xác định';
                 $viewCount = (int)($job['view_count'] ?? 0);
+                $jobQuantity = isset($job['quantity']) && $job['quantity'] ? (int)$job['quantity'] : null;
+                $jobDeadline = $job['deadline'] ? date('d/m/Y', strtotime($job['deadline'])) : null;
                 $isSaved = $canSaveJobs && in_array($jobId, $savedJobIds, true);
               ?>
               <div class="col-xl-4 col-md-6">
@@ -489,6 +534,8 @@ $currentUri = $_SERVER['REQUEST_URI'] ?? (BASE_URL . '/employer/show.php?id=' . 
                     <span><i class="fa-solid fa-coins"></i><?= htmlspecialchars($jobSalary) ?></span>
                     <span><i class="fa-solid fa-suitcase"></i><?= htmlspecialchars($employmentType) ?></span>
                     <span><i class="fa-solid fa-eye"></i><?= number_format($viewCount) ?> lượt xem</span>
+                    <span><i class="fa-solid fa-users"></i><?= $jobQuantity ? $jobQuantity . ' vị trí' : 'Không giới hạn' ?></span>
+                    <span><i class="fa-solid fa-calendar-day"></i><?= $jobDeadline ? 'Hạn ' . htmlspecialchars($jobDeadline) : 'Hạn linh hoạt' ?></span>
                   </div>
 
                   <div class="job-footer">
@@ -524,6 +571,8 @@ $currentUri = $_SERVER['REQUEST_URI'] ?? (BASE_URL . '/employer/show.php?id=' . 
                 $relatedSalary = $relatedJob['salary'] ?: 'Thỏa thuận';
                 $relatedEmployment = $relatedJob['employment_type'] ?: 'Full-time';
                 $relatedViews = (int)($relatedJob['view_count'] ?? 0);
+                $relatedQuantity = isset($relatedJob['quantity']) && $relatedJob['quantity'] ? (int)$relatedJob['quantity'] : null;
+                $relatedDeadline = $relatedJob['deadline'] ? date('d/m/Y', strtotime($relatedJob['deadline'])) : null;
                 $relatedLogoPath = trim((string)($relatedJob['logo_path'] ?? ''));
                 $relatedLogoUrl = $relatedLogoPath !== '' ? BASE_URL . '/' . ltrim($relatedLogoPath, '/') : '';
                 $relatedDetailUrl = BASE_URL . '/job/share/view.php?id=' . $relatedJobId;
@@ -557,6 +606,8 @@ $currentUri = $_SERVER['REQUEST_URI'] ?? (BASE_URL . '/employer/show.php?id=' . 
                     <span><i class="fa-solid fa-coins"></i><?= htmlspecialchars($relatedSalary) ?></span>
                     <span><i class="fa-solid fa-suitcase"></i><?= htmlspecialchars($relatedEmployment) ?></span>
                     <span><i class="fa-solid fa-eye"></i><?= number_format($relatedViews) ?> lượt xem</span>
+                    <span><i class="fa-solid fa-users"></i><?= $relatedQuantity ? $relatedQuantity . ' vị trí' : 'Không giới hạn' ?></span>
+                    <span><i class="fa-solid fa-calendar-day"></i><?= $relatedDeadline ? 'Hạn ' . htmlspecialchars($relatedDeadline) : 'Hạn linh hoạt' ?></span>
                   </div>
 
                   <div class="job-footer">

@@ -9,6 +9,11 @@ $userModel = new User();
 $user = $userModel->getById($_SESSION['user_id']);
 $role = $_SESSION['role_id'];
 
+if ((int)$role === 2) {
+  header('Location: ' . BASE_URL . '/employer/admin/dashboard.php');
+  exit;
+}
+
 // Mock stats data (replace with real database queries)
 $stats = [
   'applications' => 12,
@@ -158,7 +163,7 @@ require_once __DIR__ . '/includes/header.php';
           </a>
         </div>
         <div class="col-lg-3 col-md-6">
-          <a href="<?= BASE_URL ?>/employer_profile.php" class="quick-action-card">
+          <a href="<?= BASE_URL ?>/employer/edit.php" class="quick-action-card">
             <div class="action-icon-box" style="background: linear-gradient(135deg, rgba(108,117,125,0.1), rgba(108,117,125,0.2));">
               <i class="fa-solid fa-building" style="color: #6c757d;"></i>
             </div>
@@ -178,7 +183,7 @@ require_once __DIR__ . '/includes/header.php';
           </a>
         </div>
         <div class="col-lg-3 col-md-6">
-          <a href="<?= BASE_URL ?>/jobs.php" class="quick-action-card">
+          <a href="<?= BASE_URL ?>/job/share/index.php" class="quick-action-card">
             <div class="action-icon-box" style="background: linear-gradient(135deg, rgba(13,110,253,0.1), rgba(13,110,253,0.2));">
               <i class="fa-solid fa-magnifying-glass" style="color: #0d6efd;"></i>
             </div>
@@ -187,7 +192,7 @@ require_once __DIR__ . '/includes/header.php';
           </a>
         </div>
         <div class="col-lg-3 col-md-6">
-          <a href="<?= BASE_URL ?>/saved_jobs.php" class="quick-action-card">
+          <a href="<?= BASE_URL ?>/job/share/index.php?saved=1" class="quick-action-card">
             <div class="action-icon-box" style="background: linear-gradient(135deg, rgba(255,193,7,0.1), rgba(255,193,7,0.2));">
               <i class="fa-solid fa-bookmark" style="color: #ffc107;"></i>
             </div>
@@ -196,12 +201,12 @@ require_once __DIR__ . '/includes/header.php';
           </a>
         </div>
         <div class="col-lg-3 col-md-6">
-          <a href="<?= BASE_URL ?>/applied_jobs.php" class="quick-action-card position-relative">
+          <a href="<?= BASE_URL ?>/job/applications.php" class="quick-action-card position-relative">
             <div class="action-icon-box" style="background: linear-gradient(135deg, rgba(220,53,69,0.1), rgba(220,53,69,0.2));">
               <i class="fa-solid fa-file-circle-check" style="color: #dc3545;"></i>
             </div>
-            <h5 class="action-title">Việc đã ứng tuyển</h5>
-            <p class="action-description">Theo dõi trạng thái đơn</p>
+            <h5 class="action-title">Ứng tuyển của tôi</h5>
+            <p class="action-description">Xem và quản lý các đơn đã nộp</p>
             <?php if ($stats['applications'] > 0): ?>
             <span class="notification-badge"><?= $stats['applications'] ?></span>
             <?php endif; ?>
@@ -379,6 +384,10 @@ require_once __DIR__ . '/includes/header.php';
             <a href="<?= BASE_URL ?>/jobs.php" class="list-group-item list-group-item-action">
               <i class="fa-solid fa-magnifying-glass me-2 text-primary"></i>
               Tìm việc làm phù hợp
+            </a>
+            <a href="<?= BASE_URL ?>/job/applications.php" class="list-group-item list-group-item-action">
+              <i class="fa-solid fa-file-circle-check me-2 text-danger"></i>
+              Ứng tuyển của tôi
             </a>
             <a href="<?= BASE_URL ?>/companies.php" class="list-group-item list-group-item-action">
               <i class="fa-solid fa-building me-2 text-info"></i>

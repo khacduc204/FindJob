@@ -15,9 +15,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $role = $_SESSION['role_id'] ?? 3;
         if ($role == 1) {
             header('Location: /JobFind/admin/index.php');
+        } elseif ($role == 2) {
+            header('Location: ' . BASE_URL . '/employer/admin/dashboard.php');
         } else {
-            // Cả employer và candidate đều về dashboard
-            header('Location: /JobFind/public/dashboard.php');
+            header('Location: ' . BASE_URL . '/dashboard.php');
         }
         exit;
     }
