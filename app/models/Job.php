@@ -60,6 +60,35 @@ class Job extends Database {
         return ($job['status'] ?? '') === 'published' && !self::isExpired($job);
     }
 
+    public function recordView(int $jobId, ?string $viewerIp = null): bool {
+        $jobId = (int)$jobId;
+        if ($jobId <= 0) {
+            return false;
+        }
+
+        $viewerIp = $viewerIp !== null ? trim($viewerIp) : null;
+        if ($viewerIp === '') {
+            $viewerIp = null;
+        }
+        if ($viewerIp !== null && strlen($viewerIp) > 45) {
+            $viewerIp = substr($viewerIp, 0, 45);
+        }
+
+        $sql = "INSERT INTO job_views (job_id, viewer_ip, viewed_at) VALUES (?, ?, NOW())";
+        $stmt = $this->conn->prepare($sql);
+        if ($stmt === false) {
+            return false;
+        }
+
+        $jobIdParam = $jobId;
+        $viewerIpParam = $viewerIp;
+        $stmt->bind_param('is', $jobIdParam, $viewerIpParam);
+        $result = $stmt->execute();
+        $stmt->close();
+
+        return $result;
+    }
+
     public function create($employer_id, $title, $description, $jobRequirements = null, $location = null, $salary = null, $employment_type = null, $status = 'draft', $quantity = null, $deadline = null) {
         $status = in_array($status, $this->allowedStatuses, true) ? $status : 'draft';
         $location = $this->normalizeOptionalString($location);

@@ -92,7 +92,7 @@ if (empty($hotJobs)) {
 if (empty($hotJobs)) {
   $hotJobs = $jobModel->getFeaturedJobs(4);
 }
-$topEmployers = $employerModel->getTopEmployersByJobs(6);
+$topEmployers = $employerModel->getTopEmployersByJobs(5);
 
 if (empty($searchKeywords)) {
   $searchKeywords = array_map(static function ($cat) {
@@ -284,7 +284,7 @@ require_once __DIR__ . '/includes/header.php';
           <h2>Việc làm hot</h2>
           <p>Được nhiều ứng viên quan tâm nhất trong thời gian gần đây</p>
         </div>
-        <a class="btn-link-primary" href="<?= BASE_URL ?>/job/share/hot.php">
+        <a class="btn-link-primary" href="<?= BASE_URL ?>/job/share/index.php">
           Xem thêm việc làm
           <i class="fa-solid fa-arrow-right"></i>
         </a>
@@ -365,22 +365,45 @@ require_once __DIR__ . '/includes/header.php';
         <h2 class="mt-3">Những thương hiệu đồng hành cùng JobFind</h2>
         <p class="text-muted">Từ tập đoàn công nghệ tới startup tiềm năng, hơn 5.000 doanh nghiệp tin tưởng vào JobFind</p>
       </div>
-      <div class="row row-cols-2 row-cols-md-3 row-cols-lg-6 g-3 align-items-center">
-        <?php if (!empty($topEmployers)): ?>
-          <?php foreach ($topEmployers as $employer): ?>
-            <div class="col">
-              <div class="jf-brand-card fade-in-element">
-                <span class="d-block mb-1 fw-semibold"><?= htmlspecialchars($employer['company_name'] ?: 'Nhà tuyển dụng') ?></span>
-                <small class="text-muted"><?= number_format((int)$employer['job_count']) ?> việc làm</small>
+      <?php if (!empty($topEmployers)): ?>
+        <div class="trusted-row no-wrap">
+          <?php foreach ($topEmployers as $index => $employer): ?>
+            <?php
+              $companyName = trim($employer['company_name'] ?? '') ?: 'Nhà tuyển dụng JobFind';
+              $jobCount = (int)($employer['job_count'] ?? 0);
+              $words = explode(' ', $companyName);
+              $initial = '';
+              if (function_exists('mb_substr')) {
+                if (count($words) >= 2) {
+                  $initial = mb_strtoupper(mb_substr($words[0], 0, 1, 'UTF-8'), 'UTF-8') . mb_strtoupper(mb_substr($words[1], 0, 1, 'UTF-8'), 'UTF-8');
+                } else {
+                  $initial = mb_strtoupper(mb_substr($companyName, 0, 2, 'UTF-8'), 'UTF-8');
+                }
+              } else {
+                $initial = strtoupper(substr($companyName, 0, 2));
+              }
+              $rankNum = $index + 1;
+            ?>
+            <div class="jf-brand-card fade-in-element">
+              <!-- <div class="brand-header">
+                <div class="brand-logo">
+                  <span class="brand-initial"><?= htmlspecialchars($initial) ?></span>
+                </div>
+                <div class="brand-rank">#<?= $rankNum ?></div>
+              </div> -->
+              <div class="brand-content">
+                <h6 class="brand-name" title="<?= htmlspecialchars($companyName) ?>"><?= htmlspecialchars($companyName) ?></h6>
+                <div class="brand-stats">
+                  <i class="fa-solid fa-briefcase"></i>
+                  <span><?= number_format($jobCount) ?> việc làm</span>
+                </div>
               </div>
             </div>
           <?php endforeach; ?>
-        <?php else: ?>
-          <div class="col-12">
-            <div class="alert alert-light border text-center mb-0">Chưa có dữ liệu nhà tuyển dụng nổi bật.</div>
-          </div>
-        <?php endif; ?>
-      </div>
+        </div>
+      <?php else: ?>
+        <div class="alert alert-light border text-center mb-0">Chưa có dữ liệu nhà tuyển dụng nổi bật.</div>
+      <?php endif; ?>
     </div>
   </section>
 

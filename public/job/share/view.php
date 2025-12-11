@@ -22,6 +22,15 @@ if (!$job || !Job::isActive($job)) {
     exit;
 }
 
+$viewerIp = null;
+if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+  $forwardedIps = explode(',', (string)$_SERVER['HTTP_X_FORWARDED_FOR']);
+  $viewerIp = trim($forwardedIps[0]);
+} elseif (!empty($_SERVER['REMOTE_ADDR'])) {
+  $viewerIp = (string)$_SERVER['REMOTE_ADDR'];
+}
+$jobModel->recordView($jobId, $viewerIp);
+
 $jobCategories = $jobModel->getCategoriesForJob($jobId);
 $jobCategoryNames = [];
 foreach ($jobCategories as $jobCategory) {

@@ -483,6 +483,9 @@ $currentUri = $_SERVER['REQUEST_URI'] ?? (BASE_URL . '/employer/show.php?id=' . 
           </div>
           <a class="btn btn-outline-success" href="<?= BASE_URL ?>/job/share/index.php">Khám phá thêm việc làm</a>
         </div>
+        
+        <?php $relatedJobs = array_slice($relatedJobs, 0, 3); ?>
+
 
         <?php if ($totalJobs === 0): ?>
           <div class="alert alert-light border text-center py-5">
@@ -561,7 +564,7 @@ $currentUri = $_SERVER['REQUEST_URI'] ?? (BASE_URL . '/employer/show.php?id=' . 
         <?php if (empty($relatedJobs)): ?>
           <div class="alert alert-light border text-center mb-0">Chưa có gợi ý việc làm phù hợp. Tiếp tục khám phá trên JobFind nhé!</div>
         <?php else: ?>
-          <div class="row g-4">
+          <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4">
             <?php foreach ($relatedJobs as $relatedJob): ?>
               <?php
                 $relatedJobId = (int)($relatedJob['id'] ?? 0);
@@ -573,53 +576,92 @@ $currentUri = $_SERVER['REQUEST_URI'] ?? (BASE_URL . '/employer/show.php?id=' . 
                 $relatedViews = (int)($relatedJob['view_count'] ?? 0);
                 $relatedQuantity = isset($relatedJob['quantity']) && $relatedJob['quantity'] ? (int)$relatedJob['quantity'] : null;
                 $relatedDeadline = $relatedJob['deadline'] ? date('d/m/Y', strtotime($relatedJob['deadline'])) : null;
+                $relatedPosted = $relatedJob['created_at'] ? date('d/m/Y', strtotime($relatedJob['created_at'])) : null;
                 $relatedLogoPath = trim((string)($relatedJob['logo_path'] ?? ''));
                 $relatedLogoUrl = $relatedLogoPath !== '' ? BASE_URL . '/' . ltrim($relatedLogoPath, '/') : '';
                 $relatedDetailUrl = BASE_URL . '/job/share/view.php?id=' . $relatedJobId;
                 $relatedSaved = $canSaveJobs && in_array($relatedJobId, $savedJobIds, true);
               ?>
-              <div class="col-xl-4 col-md-6">
-                <article class="job-card h-100">
-                  <div class="d-flex align-items-start justify-content-between">
-                    <div class="d-flex flex-column gap-1">
-                      <span class="text-muted small fw-semibold text-uppercase"><?= htmlspecialchars($relatedCompany) ?></span>
-                      <h3 class="h5 mb-0"><a href="<?= htmlspecialchars($relatedDetailUrl) ?>" class="text-decoration-none"><?= htmlspecialchars($relatedTitle) ?></a></h3>
+              <div class="col">
+                <article class="related-card h-100">
+                  <div class="related-card__header">
+                    <div>
+                      <span class="related-card__company"><?= htmlspecialchars($relatedCompany) ?></span>
+                      <h3 class="related-card__title"><a href="<?= htmlspecialchars($relatedDetailUrl) ?>" class="stretched-link text-decoration-none"><?= htmlspecialchars($relatedTitle) ?></a></h3>
                     </div>
-                    <?php if ($canSaveJobs): ?>
-                      <form action="<?= BASE_URL ?>/job/share/save.php" method="post" class="job-save-form">
-                        <input type="hidden" name="job_id" value="<?= $relatedJobId ?>">
-                        <input type="hidden" name="return" value="<?= htmlspecialchars($currentUri) ?>">
-                        <input type="hidden" name="action" value="<?= $relatedSaved ? 'remove' : 'save' ?>">
-                        <button type="submit" class="btn btn-sm btn-link p-0 text-decoration-none <?= $relatedSaved ? 'text-danger' : 'text-muted' ?>" title="<?= $relatedSaved ? 'Bỏ lưu việc làm' : 'Lưu việc làm' ?>" aria-label="<?= $relatedSaved ? 'Bỏ lưu việc làm' : 'Lưu việc làm' ?>">
-                          <i class="fa-<?= $relatedSaved ? 'solid' : 'regular' ?> fa-heart fa-lg"></i>
-                        </button>
-                      </form>
-                    <?php else: ?>
-                      <a href="<?= BASE_URL ?>/account/login.php" class="btn btn-sm btn-link p-0 text-muted" title="Đăng nhập để lưu việc" aria-label="Đăng nhập để lưu việc">
-                        <i class="fa-regular fa-heart fa-lg"></i>
-                      </a>
-                    <?php endif; ?>
-                  </div>
-
-                  <div class="job-meta">
-                    <span><i class="fa-solid fa-location-dot"></i><?= htmlspecialchars($relatedLocation) ?></span>
-                    <span><i class="fa-solid fa-coins"></i><?= htmlspecialchars($relatedSalary) ?></span>
-                    <span><i class="fa-solid fa-suitcase"></i><?= htmlspecialchars($relatedEmployment) ?></span>
-                    <span><i class="fa-solid fa-eye"></i><?= number_format($relatedViews) ?> lượt xem</span>
-                    <span><i class="fa-solid fa-users"></i><?= $relatedQuantity ? $relatedQuantity . ' vị trí' : 'Không giới hạn' ?></span>
-                    <span><i class="fa-solid fa-calendar-day"></i><?= $relatedDeadline ? 'Hạn ' . htmlspecialchars($relatedDeadline) : 'Hạn linh hoạt' ?></span>
-                  </div>
-
-                  <div class="job-footer">
-                    <div class="d-flex align-items-center gap-3">
-                      <?php if ($relatedLogoUrl !== ''): ?>
-                        <span class="avatar-sm"><img src="<?= htmlspecialchars($relatedLogoUrl) ?>" alt="<?= htmlspecialchars($relatedCompany) ?>"></span>
+                    <div class="related-card__actions">
+                      <span class="badge bg-success bg-opacity-10 text-success"><i class="fa-solid fa-eye me-1"></i><?= number_format($relatedViews) ?></span>
+                      <?php if ($canSaveJobs): ?>
+                        <form action="<?= BASE_URL ?>/job/share/save.php" method="post" class="job-save-form">
+                          <input type="hidden" name="job_id" value="<?= $relatedJobId ?>">
+                          <input type="hidden" name="return" value="<?= htmlspecialchars($currentUri) ?>">
+                          <input type="hidden" name="action" value="<?= $relatedSaved ? 'remove' : 'save' ?>">
+                          <button type="submit" class="btn btn-sm btn-link p-0 text-decoration-none <?= $relatedSaved ? 'text-danger' : 'text-muted' ?>" title="<?= $relatedSaved ? 'Bỏ lưu việc làm' : 'Lưu việc làm' ?>" aria-label="<?= $relatedSaved ? 'Bỏ lưu việc làm' : 'Lưu việc làm' ?>">
+                            <i class="fa-<?= $relatedSaved ? 'solid' : 'regular' ?> fa-heart fa-lg"></i>
+                          </button>
+                        </form>
                       <?php else: ?>
-                        <span class="avatar-sm avatar-fallback"><?= htmlspecialchars(strtoupper(substr($relatedCompany, 0, 2))) ?></span>
+                        <a href="<?= BASE_URL ?>/account/login.php" class="btn btn-sm btn-link p-0 text-muted" title="Đăng nhập để lưu việc" aria-label="Đăng nhập để lưu việc">
+                          <i class="fa-regular fa-heart fa-lg"></i>
+                        </a>
                       <?php endif; ?>
-                      <span class="badge bg-light text-success border border-success"><?= htmlspecialchars($relatedEmployment) ?></span>
                     </div>
-                    <a class="btn btn-outline-success" href="<?= htmlspecialchars($relatedDetailUrl) ?>">Xem chi tiết <i class="fa-solid fa-arrow-right ms-2"></i></a>
+                  </div>
+
+                  <div class="related-card__meta">
+                    <span><i class="fa-solid fa-location-dot"></i><?= htmlspecialchars($relatedLocation) ?></span>
+                    <span><i class="fa-regular fa-calendar"></i><?= $relatedPosted ? 'Đăng ngày ' . htmlspecialchars($relatedPosted) : 'Đang cập nhật' ?></span>
+                  </div>
+
+                  <ul class="related-card__stats">
+                    <li>
+                      <i class="fa-solid fa-coins text-success"></i>
+                      <div>
+                        <small class="text-muted">Mức lương</small>
+                        <strong><?= htmlspecialchars($relatedSalary) ?></strong>
+                      </div>
+                    </li>
+                    <li>
+                      <i class="fa-solid fa-suitcase text-primary"></i>
+                      <div>
+                        <small class="text-muted">Hình thức</small>
+                        <strong><?= htmlspecialchars($relatedEmployment) ?></strong>
+                      </div>
+                    </li>
+                    <li>
+                      <i class="fa-solid fa-users text-warning"></i>
+                      <div>
+                        <small class="text-muted">Số lượng</small>
+                        <strong><?= $relatedQuantity ? $relatedQuantity . ' vị trí' : 'Không giới hạn' ?></strong>
+                      </div>
+                    </li>
+                    <li>
+                      <i class="fa-solid fa-calendar-day text-danger"></i>
+                      <div>
+                        <small class="text-muted">Hạn nộp</small>
+                        <strong><?= $relatedDeadline ? htmlspecialchars($relatedDeadline) : 'Linh hoạt' ?></strong>
+                      </div>
+                    </li>
+                  </ul>
+
+                  <div class="related-card__footer">
+                    <div class="related-card__employer">
+                      <?php if ($relatedLogoUrl !== ''): ?>
+                        <span class="related-card__avatar"><img src="<?= htmlspecialchars($relatedLogoUrl) ?>" alt="<?= htmlspecialchars($relatedCompany) ?>"></span>
+                      <?php else: ?>
+                        <span class="related-card__avatar related-card__avatar--fallback"><?= htmlspecialchars(strtoupper(substr($relatedCompany, 0, 2))) ?></span>
+                      <?php endif; ?>
+                      <div>
+                        <small class="text-muted">Thương hiệu</small>
+                        <strong><?= htmlspecialchars($relatedCompany) ?></strong>
+                      </div>
+                    </div>
+                    <div class="related-card__cta">
+                      <span class="badge bg-light text-success border border-success">
+                        <?= htmlspecialchars($relatedEmployment) ?>
+                      </span>
+                      <a class="btn btn-success" href="<?= htmlspecialchars($relatedDetailUrl) ?>">Xem chi tiết<i class="fa-solid fa-arrow-right ms-2"></i></a>
+                    </div>
                   </div>
                 </article>
               </div>

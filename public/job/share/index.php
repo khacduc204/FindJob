@@ -35,7 +35,7 @@ if ($filters['employment_type'] !== '' && !in_array($filters['employment_type'],
     $filters['employment_type'] = '';
 }
 
-$perPage = 12;
+$perPage = 6;
 $page = max(1, (int)($_GET['page'] ?? 1));
 
 $savedParam = isset($_GET['saved']) ? trim((string)$_GET['saved']) : '';

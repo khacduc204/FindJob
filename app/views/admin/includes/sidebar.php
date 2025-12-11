@@ -22,6 +22,7 @@
       <ul class="collapse list-unstyled ps-4" id="userSubmenu" data-bs-parent="#sidebar-nav">
         <li><a class="nav-link" href="/JobFind/admin/user/users.php">Danh sách người dùng</a></li>
         <li><a class="nav-link" href="/JobFind/admin/user/add_user.php">Thêm người dùng</a></li>
+        <li><a class="nav-link" href="/JobFind/admin/roles/index.php">Vai trò &amp; phân quyền</a></li>
       </ul>
     </li>
 

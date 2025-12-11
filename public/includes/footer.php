@@ -40,7 +40,7 @@
         </form>
         <div class="mt-4">
           <p class="fw-semibold mb-1">Tổng đài hỗ trợ</p>
-          <a href="tel:0123456789" class="text-decoration-none d-block">0123 456 789</a>
+          <a href="tel:0978843662" class="text-decoration-none d-block">0978.843.662</a>
           <a href="mailto:support@jobfind.vn" class="text-decoration-none">support@jobfind.vn</a>
         </div>
       </div>

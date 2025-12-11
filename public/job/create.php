@@ -125,6 +125,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $pageTitle = 'Đăng tin tuyển dụng mới | JobFind';
 $bodyClass = 'job-manage-page';
+$additionalScripts = $additionalScripts ?? [];
+$additionalScripts[] = '<script src="https://cdn.tiny.cloud/1/d7chqy488l9bipext69mb6wn3a6znouyljw4wi660kj89lg8/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>';
+$additionalScripts[] = <<<'HTML'
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (!window.tinymce) {
+    return;
+  }
+  tinymce.init({
+    selector: 'textarea.tinymce-editor',
+    height: 360,
+    menubar: false,
+    statusbar: false,
+    plugins: 'lists link table code autoresize',
+    toolbar: 'undo redo | bold italic underline | bullist numlist | link table | alignleft aligncenter alignright | removeformat code',
+    branding: false,
+    content_style: 'body { font-family: var(--bs-body-font-family); font-size: 15px; line-height: 1.6; }'
+  });
+
+  document.querySelectorAll('form').forEach(function (form) {
+    form.addEventListener('submit', function () {
+      if (window.tinymce) {
+        tinymce.triggerSave();
+      }
+    });
+  });
+});
+</script>
+HTML;
 require_once dirname(__DIR__) . '/includes/header.php';
 
 $employmentOptions = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freelance'];
@@ -135,9 +164,9 @@ $employmentOptions = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freel
     <div class="col-12 col-lg-8">
       <h1 class="fw-semibold mb-1">Đăng tin tuyển dụng mới</h1>
       <p class="text-muted mb-0">Mô tả chi tiết vị trí để thu hút ứng viên phù hợp.</p>
-      <div class="alert alert-warning mt-3">
+      <!-- <div class="alert alert-warning mt-3">
         Tin mới sẽ ở trạng thái <strong>chờ duyệt</strong>. Quản trị viên sẽ kiểm tra trước khi tin được hiển thị với ứng viên.
-      </div>
+      </div> -->
     </div>
     <div class="col-12 col-lg-4 text-lg-end mt-3 mt-lg-0">
       <a href="<?= BASE_URL ?>/job/index.php" class="btn btn-outline-secondary">
@@ -193,13 +222,13 @@ $employmentOptions = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freel
 
       <div class="mt-3">
         <label for="jobDescription" class="form-label">Mô tả công việc<span class="text-danger">*</span></label>
-        <textarea id="jobDescription" name="description" rows="8" class="form-control <?= isset($errors['description']) ? 'is-invalid' : '' ?>" placeholder="Nêu rõ trách nhiệm, yêu cầu và quyền lợi của vị trí."><?= htmlspecialchars($values['description']) ?></textarea>
+        <textarea id="jobDescription" name="description" rows="8" class="form-control tinymce-editor <?= isset($errors['description']) ? 'is-invalid' : '' ?>" placeholder="Nêu rõ trách nhiệm, yêu cầu và quyền lợi của vị trí."><?= htmlspecialchars($values['description']) ?></textarea>
         <?php if (isset($errors['description'])) : ?><div class="invalid-feedback"><?= htmlspecialchars($errors['description']) ?></div><?php endif; ?>
       </div>
 
       <div class="mt-3">
         <label for="jobRequirements" class="form-label">Yêu cầu ứng viên<span class="text-danger">*</span></label>
-        <textarea id="jobRequirements" name="job_requirements" rows="6" class="form-control <?= isset($errors['job_requirements']) ? 'is-invalid' : '' ?>" placeholder="Liệt kê kỹ năng, kinh nghiệm tối thiểu, chứng chỉ bắt buộc và tố chất cần có."><?= htmlspecialchars($values['job_requirements']) ?></textarea>
+        <textarea id="jobRequirements" name="job_requirements" rows="6" class="form-control tinymce-editor <?= isset($errors['job_requirements']) ? 'is-invalid' : '' ?>" placeholder="Liệt kê kỹ năng, kinh nghiệm tối thiểu, chứng chỉ bắt buộc và tố chất cần có."><?= htmlspecialchars($values['job_requirements']) ?></textarea>
         <?php if (isset($errors['job_requirements'])) : ?><div class="invalid-feedback"><?= htmlspecialchars($errors['job_requirements']) ?></div><?php endif; ?>
         <div class="form-text">Ví dụ: 2+ năm kinh nghiệm PHP/Laravel, khả năng đọc hiểu tài liệu tiếng Anh, ưu tiên từng làm việc với REST API.</div>
       </div>

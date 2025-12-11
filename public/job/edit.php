@@ -143,6 +143,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $pageTitle = 'Chỉnh sửa tin tuyển dụng | JobFind';
 $bodyClass = 'job-manage-page';
+$additionalScripts = $additionalScripts ?? [];
+$additionalScripts[] = '<script src="https://cdn.tiny.cloud/1/d7chqy488l9bipext69mb6wn3a6znouyljw4wi660kj89lg8/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>';
+$additionalScripts[] = <<<'HTML'
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (!window.tinymce) {
+    return;
+  }
+  tinymce.init({
+    selector: 'textarea.tinymce-editor',
+    height: 360,
+    menubar: false,
+    statusbar: false,
+    plugins: 'lists link table code autoresize',
+    toolbar: 'undo redo | bold italic underline | bullist numlist | link table | alignleft aligncenter alignright | removeformat code',
+    branding: false,
+    content_style: 'body { font-family: var(--bs-body-font-family); font-size: 15px; line-height: 1.6; }'
+  });
+  document.querySelectorAll('form').forEach(function (form) {
+    form.addEventListener('submit', function () {
+      if (window.tinymce) {
+        tinymce.triggerSave();
+      }
+    });
+  });
+});
+</script>
+HTML;
 require_once dirname(__DIR__) . '/includes/header.php';
 
 $employmentOptions = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freelance'];
@@ -223,13 +251,13 @@ $employmentOptions = ['Full-time', 'Part-time', 'Internship', 'Contract', 'Freel
 
       <div class="mt-3">
         <label for="jobDescription" class="form-label">Mô tả công việc<span class="text-danger">*</span></label>
-        <textarea id="jobDescription" name="description" rows="8" class="form-control <?= isset($errors['description']) ? 'is-invalid' : '' ?>"><?= htmlspecialchars($values['description']) ?></textarea>
+        <textarea id="jobDescription" name="description" rows="8" class="form-control tinymce-editor <?= isset($errors['description']) ? 'is-invalid' : '' ?>"><?= htmlspecialchars($values['description']) ?></textarea>
         <?php if (isset($errors['description'])) : ?><div class="invalid-feedback"><?= htmlspecialchars($errors['description']) ?></div><?php endif; ?>
       </div>
 
       <div class="mt-3">
         <label for="jobRequirements" class="form-label">Yêu cầu ứng viên<span class="text-danger">*</span></label>
-        <textarea id="jobRequirements" name="job_requirements" rows="6" class="form-control <?= isset($errors['job_requirements']) ? 'is-invalid' : '' ?>"><?= htmlspecialchars($values['job_requirements']) ?></textarea>
+        <textarea id="jobRequirements" name="job_requirements" rows="6" class="form-control tinymce-editor <?= isset($errors['job_requirements']) ? 'is-invalid' : '' ?>"><?= htmlspecialchars($values['job_requirements']) ?></textarea>
         <?php if (isset($errors['job_requirements'])) : ?><div class="invalid-feedback"><?= htmlspecialchars($errors['job_requirements']) ?></div><?php endif; ?>
         <div class="form-text">Cập nhật kỹ năng, kinh nghiệm và chứng chỉ tối thiểu mà ứng viên cần có.</div>
       </div>

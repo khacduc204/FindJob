@@ -284,6 +284,139 @@ class Employer extends Database {
         return $companies;
     }
 
+    public function getDirectoryPaginated(array $options = [], int $page = 1, int $perPage = 6): array {
+        $search = isset($options['search']) ? trim((string)$options['search']) : '';
+        $location = isset($options['location']) ? trim((string)$options['location']) : '';
+        $sort = isset($options['sort']) ? (string)$options['sort'] : 'featured';
+
+        $page = max(1, $page);
+        $perPage = max(1, $perPage);
+
+        $baseSql = "SELECT e.id, e.company_name, e.website, e.address, e.about, e.logo_path,
+                COALESCE(SUM(CASE WHEN j.status = 'published' THEN 1 ELSE 0 END), 0) AS job_count,
+                MAX(CASE WHEN j.status = 'published' THEN j.created_at ELSE NULL END) AS latest_job_at
+                FROM employers e
+                LEFT JOIN jobs j ON j.employer_id = e.id
+                WHERE 1 = 1";
+
+        $types = '';
+        $params = [];
+
+        if ($search !== '') {
+            $baseSql .= " AND (e.company_name LIKE ? OR e.about LIKE ?)";
+            $like = '%' . $search . '%';
+            $types .= 'ss';
+            $params[] = $like;
+            $params[] = $like;
+        }
+
+        if ($location !== '') {
+            $baseSql .= " AND e.address LIKE ?";
+            $types .= 's';
+            $params[] = '%' . $location . '%';
+        }
+
+        $baseSql .= " GROUP BY e.id";
+
+        $orderSql = '';
+        switch ($sort) {
+            case 'recent':
+                $orderSql = " ORDER BY latest_job_at DESC, e.company_name ASC";
+                break;
+            case 'alphabet':
+                $orderSql = " ORDER BY e.company_name ASC";
+                break;
+            default:
+                $orderSql = " ORDER BY job_count DESC, e.company_name ASC";
+                break;
+        }
+
+        $countSql = "SELECT COUNT(*) AS total FROM (" . $baseSql . ") AS employer_directory";
+        $total = 0;
+        $queryError = null;
+
+        if ($types === '') {
+            $countResult = $this->conn->query($countSql);
+            if ($countResult instanceof mysqli_result) {
+                $row = $countResult->fetch_assoc();
+                $total = (int)($row['total'] ?? 0);
+                $countResult->free();
+            } else {
+                $queryError = $this->conn->error;
+            }
+        } else {
+            $countStmt = $this->conn->prepare($countSql);
+            if ($countStmt === false) {
+                $queryError = $this->conn->error;
+            } else {
+                $countStmt->bind_param($types, ...$params);
+                if ($countStmt->execute()) {
+                    $countResult = $countStmt->get_result();
+                    if ($countResult) {
+                        $row = $countResult->fetch_assoc();
+                        $total = (int)($row['total'] ?? 0);
+                        $countResult->free();
+                    }
+                } else {
+                    $queryError = $countStmt->error;
+                }
+                $countStmt->close();
+            }
+        }
+
+        $totalPages = $total > 0 ? (int)ceil($total / $perPage) : 1;
+        if ($totalPages < 1) {
+            $totalPages = 1;
+        }
+        if ($total > 0 && $page > $totalPages) {
+            $page = $totalPages;
+        }
+
+        $offset = ($page - 1) * $perPage;
+        $rows = [];
+
+        if ($queryError === null) {
+            $dataSql = $baseSql . $orderSql . " LIMIT ? OFFSET ?";
+            $dataTypes = $types . 'ii';
+            $dataParams = $params;
+            $dataParams[] = $perPage;
+            $dataParams[] = $offset;
+
+            $dataStmt = $this->conn->prepare($dataSql);
+            if ($dataStmt === false) {
+                $queryError = $this->conn->error;
+            } else {
+                $dataStmt->bind_param($dataTypes, ...$dataParams);
+                if ($dataStmt->execute()) {
+                    $result = $dataStmt->get_result();
+                    if ($result) {
+                        while ($row = $result->fetch_assoc()) {
+                            $rows[] = $row;
+                        }
+                        $result->free();
+                    }
+                } else {
+                    $queryError = $dataStmt->error;
+                }
+                $dataStmt->close();
+            }
+        }
+
+        return [
+            'rows' => $rows,
+            'total' => $total,
+            'page' => $page,
+            'per_page' => $perPage,
+            'total_pages' => $totalPages,
+            'query_error' => $queryError,
+            'applied_filters' => [
+                'search' => $search,
+                'location' => $location,
+                'sort' => $sort,
+            ],
+        ];
+    }
+
     public function getDistinctLocations($limit = 12) {
         $limit = max(1, (int)$limit);
         $sql = "SELECT DISTINCT address FROM employers WHERE address IS NOT NULL AND address <> '' ORDER BY address ASC LIMIT ?";

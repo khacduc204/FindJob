@@ -12,11 +12,19 @@ if (!in_array($sort, $allowedSorts, true)) {
     $sort = 'featured';
 }
 
-$companies = $employerModel->getDirectoryList([
-    'search' => $searchTerm,
-    'location' => $locationFilter,
-    'sort' => $sort,
-]);
+$perPage = 6;
+$page = max(1, (int)($_GET['page'] ?? 1));
+$directoryResult = $employerModel->getDirectoryPaginated([
+  'search' => $searchTerm,
+  'location' => $locationFilter,
+  'sort' => $sort,
+], $page, $perPage);
+
+$companies = $directoryResult['rows'];
+$matchedEmployers = (int)($directoryResult['total'] ?? 0);
+$page = (int)($directoryResult['page'] ?? $page);
+$totalPages = (int)($directoryResult['total_pages'] ?? 1);
+$directoryQueryError = $directoryResult['query_error'] ?? null;
 
 $directoryDataset = $employerModel->getDirectoryList();
 $totalEmployers = $employerModel->countAll();
@@ -37,15 +45,14 @@ if (!empty($locationMap)) {
     $locationSuggestions = array_slice($locationValues, 0, 8);
 }
 
-$buildQuery = static function (array $overrides = []) use ($searchTerm, $locationFilter, $sort) {
-    $params = [
-        'q' => $searchTerm !== '' ? $searchTerm : null,
-        'location' => $locationFilter !== '' ? $locationFilter : null,
-        'sort' => $sort !== 'featured' ? $sort : null,
-    ];
-    foreach ($overrides as $key => $value) {
-        $params[$key] = $value;
-    }
+$baseQueryParams = [
+  'q' => $searchTerm !== '' ? $searchTerm : null,
+  'location' => $locationFilter !== '' ? $locationFilter : null,
+  'sort' => $sort !== 'featured' ? $sort : null,
+];
+
+$buildQuery = static function (array $overrides = []) use ($baseQueryParams) {
+  $params = array_merge($baseQueryParams, $overrides);
     $params = array_filter($params, static function ($value) {
         return $value !== null && $value !== '';
     });
@@ -138,9 +145,9 @@ require_once dirname(__DIR__) . '/includes/header.php';
           <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
             <span class="text-muted small">Địa điểm phổ biến:</span>
             <?php foreach ($locationSuggestions as $suggestedLocation): ?>
-              <a class="badge bg-light text-dark" href="<?= $buildQuery(['location' => $suggestedLocation]) ?>"><?= htmlspecialchars($suggestedLocation) ?></a>
+                <a class="badge bg-light text-dark" href="<?= $buildQuery(['location' => $suggestedLocation, 'page' => null]) ?>"><?= htmlspecialchars($suggestedLocation) ?></a>
             <?php endforeach; ?>
-            <a class="badge bg-light text-dark" href="<?= $buildQuery(['location' => null]) ?>">Toàn quốc</a>
+              <a class="badge bg-light text-dark" href="<?= $buildQuery(['location' => null, 'page' => null]) ?>">Toàn quốc</a>
           </div>
         <?php endif; ?>
       </div>
@@ -150,15 +157,17 @@ require_once dirname(__DIR__) . '/includes/header.php';
   <section class="directory-results">
     <div class="container">
       <?php if (!empty($searchTerm) || !empty($locationFilter)): ?>
-        <p class="text-muted mb-4">Đang hiển thị <strong><?= count($companies) ?></strong> doanh nghiệp cho từ khóa <strong><?= htmlspecialchars($searchTerm ?: 'Tất cả') ?></strong><?php if ($locationFilter !== ''): ?> tại <strong><?= htmlspecialchars($locationFilter) ?></strong><?php endif; ?>.</p>
+        <p class="text-muted mb-4">Đang hiển thị <strong><?= count($companies) ?></strong> / <strong><?= number_format($matchedEmployers) ?></strong> doanh nghiệp cho từ khóa <strong><?= htmlspecialchars($searchTerm ?: 'Tất cả') ?></strong><?php if ($locationFilter !== ''): ?> tại <strong><?= htmlspecialchars($locationFilter) ?></strong><?php endif; ?>.</p>
       <?php endif; ?>
 
-      <?php if (empty($companies)): ?>
+      <?php if ($directoryQueryError): ?>
+        <div class="alert alert-danger">Không thể tải danh sách doanh nghiệp lúc này. (<?= htmlspecialchars($directoryQueryError) ?>)</div>
+      <?php elseif (empty($companies)): ?>
         <div class="company-empty">
           <i class="fa-regular fa-circle-question"></i>
           <h3 class="fw-semibold">Chưa tìm thấy doanh nghiệp phù hợp</h3>
           <p>Hãy thử điều chỉnh từ khóa tìm kiếm hoặc chọn địa điểm khác để khám phá thêm nhiều nhà tuyển dụng tiềm năng trên JobFind.</p>
-          <a class="btn btn-outline-success mt-3" href="<?= $buildQuery(['q' => null, 'location' => null]) ?>">Xóa bộ lọc</a>
+          <a class="btn btn-outline-success mt-3" href="<?= $buildQuery(['q' => null, 'location' => null, 'page' => null]) ?>">Xóa bộ lọc</a>
         </div>
       <?php else: ?>
         <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4">
@@ -225,6 +234,28 @@ require_once dirname(__DIR__) . '/includes/header.php';
             </div>
           <?php endforeach; ?>
         </div>
+        <?php if ($totalPages > 1): ?>
+          <?php
+            $startPage = max(1, $page - 2);
+            $endPage = min($totalPages, $startPage + 4);
+            $startPage = max(1, $endPage - 4);
+          ?>
+          <nav class="mt-4" aria-label="Phân trang nhà tuyển dụng">
+            <ul class="pagination justify-content-center">
+              <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+                <a class="page-link" href="<?= $page <= 1 ? '#' : $buildQuery(['page' => $page - 1]) ?>" tabindex="<?= $page <= 1 ? '-1' : '0' ?>" aria-label="Trang trước">&laquo;</a>
+              </li>
+              <?php for ($p = $startPage; $p <= $endPage; $p++): ?>
+                <li class="page-item <?= $p === $page ? 'active' : '' ?>">
+                  <a class="page-link" href="<?= $buildQuery(['page' => $p]) ?>"><?= $p ?></a>
+                </li>
+              <?php endfor; ?>
+              <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+                <a class="page-link" href="<?= $page >= $totalPages ? '#' : $buildQuery(['page' => $page + 1]) ?>" tabindex="<?= $page >= $totalPages ? '-1' : '0' ?>" aria-label="Trang sau">&raquo;</a>
+              </li>
+            </ul>
+          </nav>
+        <?php endif; ?>
       <?php endif; ?>
     </div>
   </section>
