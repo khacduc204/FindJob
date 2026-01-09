@@ -110,6 +110,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]
         );
     }
+
+        if ($statusChanged && $newStatus === 'shortlisted' && !empty($currentApplication['candidate_email'])) {
+          $candidateName = trim((string)($currentApplication['candidate_name'] ?? ''));
+          $jobTitle = $currentApplication['job_title'] ?? 'Tin tuyển dụng';
+          $companyName = trim((string)($employer['company_name'] ?? 'Nhà tuyển dụng JobFind'));
+          $subject = '[JobFind] Thư mời phỏng vấn - ' . $jobTitle;
+          $messageLines = [
+            'Chào ' . ($candidateName !== '' ? $candidateName : 'bạn') . ',',
+            '',
+            $companyName . ' đã chuyển hồ sơ của bạn sang bước phỏng vấn cho vị trí: ' . $jobTitle . '.',
+            'Vui lòng đăng nhập JobFind để xem chi tiết và xác nhận lịch: ' . BASE_URL . '/job/applications.php'
+          ];
+          if ($note !== '') {
+            $cleanNote = str_replace(["\r\n", "\r"], "\n", $note);
+            $messageLines[] = '';
+            $messageLines[] = "Ghi chú từ nhà tuyển dụng:\n" . $cleanNote;
+          }
+          $messageLines[] = '';
+          $messageLines[] = 'Chúc bạn phỏng vấn thành công!';
+          $messageLines[] = 'JobFind';
+
+          $message = implode("\n", $messageLines);
+          $fromDomain = $_SERVER['HTTP_HOST'] ?? 'jobfind.local';
+          $headers = 'From: no-reply@' . $fromDomain . "\r\n" .
+                 "MIME-Version: 1.0\r\n" .
+                 "Content-Type: text/plain; charset=UTF-8\r\n";
+          @mail($currentApplication['candidate_email'], $subject, $message, $headers);
+        }
   } else {
     $_SESSION['application_flash'] = [
       'type' => 'danger',

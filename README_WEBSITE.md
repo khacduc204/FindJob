@@ -1,133 +1,88 @@
-# 🎉 JobFind - Nâng cấp giao diện hoàn tất!
+# JobFind - Tài liệu luồng nghiệp vụ & xử lý dữ liệu
 
-## ✨ Những gì đã hoàn thành:
+Tài liệu này dùng để trình bày trước giảng viên về cách hệ thống hoạt động từ khi người dùng đăng nhập cho tới lúc dữ liệu được ghi nhận trong database. Nội dung bám sát codebase PHP/MySQL hiện tại.
 
-### 🏠 **Trang chủ (index.php)**
-- ✅ Hero section gradient xanh đẹp mắt giống TopCV
-- ✅ Form tìm kiếm với floating labels
-- ✅ Metrics động từ database
-- ✅ Ngành nghề nổi bật với icons
-- ✅ Việc làm feature cards
-- ✅ Nhà tuyển dụng uy tín
-- ✅ Animations mượt mà
+## 1. Kiến trúc tổng quan
+- Toàn bộ entry point nằm trong `public/` và `admin/`. Mỗi trang tự require `config/config.php` để khởi tạo session, kết nối DB và các hằng BASE_URL, ASSETS_URL.
+- Lớp `Database` thiết lập kết nối mysqli. Tất cả models (User, Candidate, Employer, Job, Application, SavedJob, Notification, Permission, Role, ...) kế thừa lớp này.
+- Không dùng router trung tâm. Mỗi trang HTML gọi trực tiếp controller/model cần thiết, rồi render view bằng include.
+- Thư mục `app/controllers` chứa luồng nghiệp vụ cao cấp (AuthController, JobController, CandidateController...). `app/services/JobRecommendationService.php` xử lý thuật toán gợi ý.
 
-### 🎨 **CSS & Animations (style.css)**
-```css
-✅ Fade in animations
-✅ Slide effects
-✅ Hover shine animations
-✅ Pulse animations
-✅ Toast notifications
-✅ Back to top button
-✅ Sticky header effects
-✅ Lazy loading
-✅ Responsive design
+## 2. Luồng xác thực và phân quyền
+1. Người dùng truy cập `/account/login.php` hoặc `/account/register.php`.
+2. `AuthController` xử lý đăng ký: kiểm tra trùng email, hash mật khẩu, tạo user mặc định role_id=3 (ứng viên) nếu không chọn.
+3. Đăng nhập thành công: lưu `$_SESSION['user_id']`, `role_id`, avatar URL, email, tên... Tất cả trang nội bộ kiểm tra session trước khi cho truy cập.
+4. Role 1=admin, 2=employer, 3=candidate. Các trang admin gọi thêm `AuthMiddleware::checkPermission()` đối với từng permission.
+
+## 3. Dòng dữ liệu ứng viên
+1. Ứng viên đăng ký tài khoản => `users` có record mới.
+2. Khi truy cập trang hồ sơ hoặc nộp đơn lần đầu, `CandidateController`/`Candidate` đảm bảo tồn tại record trong `candidates` (auto create nếu thiếu).
+3. Người dùng cập nhật headline, summary, location, kỹ năng (JSON), kinh nghiệm (JSON), CV path thông qua form trong `public/candidate/`.
+4. Khi apply job (`public/job/apply.php`):
+	- Kiểm tra job active (`Job::isActive`).
+	- Kiểm tra ứng viên đã có candidate_id, nếu chưa tạo mới.
+	- Lưu cover letter, CV snapshot vào bảng `applications` với status `applied`.
+	- Nếu ứng viên đã rút đơn trước đó (`withdrawn`) thì `Application::reactivateApplication` cập nhật lại trạng thái.
+5. Ứng viên xem lại các đơn ở `/job/applications.php` (gọi `Application::listForCandidate`).
+
+## 4. Dòng dữ liệu nhà tuyển dụng
+1. Nhà tuyển dụng tạo tài khoản employer (role_id=2).
+2. `Employer` bảng chứa thông tin công ty. Nếu employer chưa có profile, `JobController::ensureEmployer` sẽ tạo record rỗng khi họ mở trang quản lý job.
+3. Đăng tin: `/job/create.php` gọi `JobController::createJob` (sử dụng model `Job`) lưu thông tin job, status mặc định `draft`. Khi employer chọn publish sẽ chuyển sang `published`.
+4. Bảng liên kết ngành nghề `job_category_map` được đồng bộ bằng `Job::syncCategories` sau khi submit form.
+5. Nhà tuyển dụng xem hồ sơ ứng viên tại `/employer/admin/applications.php` (gọi `Application::listForEmployer`). Khi bấm vào chi tiết, `application_view.php` hiển thị full thông tin, cho phép đổi status kèm ghi chú.
+
+## 5. Luồng ứng tuyển & thông báo
+1. Ứng viên submit form `public/job/apply.php`:
+	- Upload CV qua helper `handle_cv_upload` (kiểm tra mime, di chuyển file).
+	- Ghi record vào `applications` (status `applied`).
+	- Flash message lưu trong session để thông báo trên UI.
+2. Employer vào chi tiết hồ sơ và đổi status:
+	- `Application::updateStatus` cập nhật `status` (applied, viewed, shortlisted, rejected, hired, withdrawn) + decision_note.
+	- Hệ thống tạo notification (`Notification::create`) gửi đến user_id của ứng viên.
+	- Nếu chuyển sang `shortlisted`, file `public/employer/admin/application_view.php` còn gửi email thực tế qua `mail()` (SMTP đã cấu hình trong PHP).
+3. Ứng viên rút đơn tại `/job/withdraw_application.php`:
+	- Cập nhật status = `withdrawn`.
+	- Gửi email thông báo cho employer (best-effort) và flash message cho ứng viên.
+
+## 6. Gợi ý việc làm thông minh
+1. Dashboard ứng viên (`public/dashboard.php`) khởi tạo `JobRecommendationService`.
+2. Service lấy profile ứng viên: kỹ năng từ JSON, tự tách thêm keywords từ headline/summary, chuẩn hóa địa điểm (bỏ dấu) và xác định các ngành yêu thích dựa trên job đã ứng tuyển hoặc lưu.
+3. `Job::getSmartRecommendations()` chạy một truy vấn duy nhất:
+	- Cho điểm địa điểm (35 điểm nếu job.location khớp pattern).
+	- Mỗi kỹ năng khớp trong title/description/job_requirements được cộng 15 điểm (tối đa 6).
+	- Mỗi ngành trùng với lịch sử được cộng 20 điểm.
+	- Loại bỏ các job đã ứng tuyển hoặc đã lưu và chỉ xét job `published` chưa hết hạn.
+4. Nếu không đủ dữ liệu, service fallback sang `Job::getFallbackRecommendations()` (job nổi bật mới cập nhật) và đánh dấu `is_fallback` để UI hiển thị badge “Gợi ý chung”.
+5. Dashboard render card kèm điểm số và badge lý do (địa điểm, kỹ năng, ngành) giúp giảng viên thấy rõ hệ thống dựa trên dữ liệu thực.
+
+## 7. Lưu đồ dữ liệu (tóm tắt)
+```
+Ứng viên -> đăng ký -> users
+Ứng viên -> cập nhật hồ sơ -> candidates (JSON skills, experience, cv_path)
+Ứng viên -> apply job -> applications (status, decision_note, snapshot CV)
+Nhà tuyển dụng -> đăng job -> jobs + job_category_map
+Nhà tuyển dụng -> duyệt hồ sơ -> applications.status + notifications + email
+Dashboard -> JobRecommendationService -> Job::getSmartRecommendations -> hiển thị gợi ý
 ```
 
-### ⚡ **JavaScript (homepage.js)**
-```javascript
-✅ Smooth scroll
-✅ Scroll animations với Intersection Observer
-✅ Counter animations
-✅ Search auto-suggestions
-✅ Job card hover effects
-✅ Toast notification system
-✅ Save job functionality
-✅ Lazy loading images
-✅ Tooltips
-```
+## 8. Cơ sở dữ liệu chính
+- `users`: thông tin đăng nhập, role_id.
+- `candidates`: hồ sơ ứng viên, kỹ năng JSON, CV path.
+- `employers`: thông tin doanh nghiệp.
+- `jobs`: tin tuyển dụng (status draft/published/closed, deadline, job_requirements, quantity).
+- `job_category_map`: map job <-> ngành.
+- `applications`: đơn ứng tuyển, status, decision_note, applied_at.
+- `saved_jobs`: danh sách job ứng viên lưu.
+- `notifications`: thông báo nội bộ hiển thị trong dashboard.
+- `job_views`: ghi nhận lượt xem để tính “việc làm hot”.
 
-### 🔐 **Authentication**
-- ✅ Login page TopCV style
-- ✅ Register page với validation
-- ✅ Kết nối database
-- ✅ Password hashing
-- ✅ Auto-login sau register
-- ✅ Session management
-
-### 📊 **Dashboard**
-- ✅ Welcome banner gradient
-- ✅ Quick action cards với icons
-- ✅ Hover effects
-- ✅ Phân quyền theo role
-- ✅ Responsive layout
-
-## 🧪 Test ngay:
-
-**URL:** `http://localhost/JobFind/public/index.php`
-
-**Tài khoản test:**
-```
-1. user@test.com / 123456 (Ứng viên)
-2. employer@test.com / 123456 (NTD)
-3. admin@test.com / 123456 (Admin)
-```
-
-## 📁 Files đã chỉnh sửa:
-
-1. **public/index.php** - Homepage với data từ DB
-2. **public/dashboard.php** - Dashboard đẹp mới
-3. **public/account/login.php** - Login TopCV
-4. **public/account/register.php** - Register TopCV
-5. **public/includes/header.php** - Header chuyên nghiệp
-6. **public/includes/footer.php** - Footer + script
-7. **public/assets/style.css** - Animations + Effects
-8. **public/assets/js/homepage.js** - Interactive features ⭐ MỚI
-9. **public/assets/js/auth.js** - Password toggle
-
-## 🎨 Color Palette:
-
-```css
---jf-primary: #00b14f (Xanh TopCV)
---jf-primary-dark: #009246
---jf-text: #2d3846
---jf-muted: #6f7882
---jf-bg: #f5f7fb
-```
-
-## 🚀 Tính năng nổi bật:
-
-### 1. Animations
-- Cards fade in khi scroll
-- Counters animate
-- Smooth transitions
-- Hover effects
-
-### 2. Interactive
-- Search suggestions rotate
-- Save job với toast
-- Back to top button
-- Sticky header
-
-### 3. Responsive
-- Mobile-friendly
-- Touch-optimized
-- Fast loading
-- Lazy images
-
-### 4. Database
-- Real-time data
-- Dynamic counts
-- Prepared statements
-- Session security
-
-## 💡 Hướng dẫn sử dụng:
-
-1. **Khởi động XAMPP** (Apache + MySQL)
-2. **Mở browser**: `http://localhost/JobFind/public/index.php`
-3. **Đăng nhập**: `user@test.com` / `123456`
-4. **Khám phá**: Scroll, click, hover để xem animations!
-
-## 🎯 Tips xem demo:
-
-- **Scroll homepage** → Xem cards fade in
-- **Hover job cards** → Xem shine effect
-- **Click save job** → Toast notification
-- **Scroll xuống** → Back to top button xuất hiện
-- **Thu nhỏ browser** → Responsive mobile
+## 9. Quy trình demo cho giảng viên
+1. Đăng nhập bằng 3 role test đã cung cấp để chứng minh phân quyền.
+2. Với tài khoản ứng viên: cập nhật kỹ năng, apply 1 job -> xem dashboard hiển thị gợi ý kèm điểm.
+3. Với employer: vào ứng viên vừa nộp -> đổi status sang shortlisted -> mở email ứng viên để chứng minh hệ thống gửi thư.
+4. Với admin: truy cập `/admin/` để cho thấy bảng thống kê và quản trị roles.
 
 ---
 
-**✅ Hoàn thành! Website đã đẹp, chuyên nghiệp, chuẩn TopCV! 🚀**
-
-Tất cả đã kết nối database, animations mượt, responsive 100%!
+Tài liệu này đảm bảo bạn có thể trình bày mạch lạc về toàn bộ luồng dữ liệu và nghiệp vụ chính của JobFind khi báo cáo đồ án.

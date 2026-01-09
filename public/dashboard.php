@@ -2,12 +2,19 @@
 <?php
 require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../app/models/User.php';
+require_once __DIR__ . '/../app/services/JobRecommendationService.php';
 if (!isset($_SESSION['user_id'])) {
   header('Location: ' . BASE_URL . '/account/login.php'); exit;
 }
 $userModel = new User();
 $user = $userModel->getById($_SESSION['user_id']);
 $role = $_SESSION['role_id'];
+
+$recommendedJobs = [];
+if ((int)$role === 3) {
+  $recommendationService = new JobRecommendationService();
+  $recommendedJobs = $recommendationService->getRecommendationsForUser((int)$user['id'], 4);
+}
 
 if ((int)$role === 2) {
   header('Location: ' . BASE_URL . '/employer/admin/dashboard.php');
@@ -220,6 +227,69 @@ require_once __DIR__ . '/includes/header.php';
       <!-- Left Column -->
       <div class="col-lg-8">
         
+        <?php if ($role == 3): ?>
+        <div class="dashboard-section">
+          <div class="section-header">
+            <h5 class="section-title">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              Việc làm gợi ý cho bạn
+            </h5>
+            <span class="badge bg-success bg-opacity-10 text-success">Bản thử nghiệm</span>
+          </div>
+          <?php if (empty($recommendedJobs)): ?>
+            <div class="empty-state">
+              <div class="empty-state-icon">
+                <i class="fa-solid fa-rocket"></i>
+              </div>
+              <h6 class="empty-state-title">Chưa đủ dữ liệu để gợi ý</h6>
+              <p class="empty-state-description">Hãy cập nhật kỹ năng hoặc lưu/ứng tuyển vài việc để hệ thống hiểu bạn hơn.</p>
+              <a href="<?= BASE_URL ?>/job/share/index.php" class="btn btn-success btn-sm mt-2">Tìm việc ngay</a>
+            </div>
+          <?php else: ?>
+            <div class="recommendation-list">
+              <?php foreach ($recommendedJobs as $job): ?>
+                <article class="card border-0 shadow-sm mb-3">
+                  <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start gap-3">
+                      <div>
+                        <h6 class="mb-1"><?= htmlspecialchars($job['title'] ?? 'Tin tuyển dụng') ?></h6>
+                        <div class="text-muted small">
+                          <?= htmlspecialchars($job['company_name'] ?? 'Nhà tuyển dụng JobFind') ?> · <?= htmlspecialchars($job['location'] ?? 'Toàn quốc') ?>
+                        </div>
+                        <div class="text-muted small mt-1">
+                          <?= htmlspecialchars($job['salary'] ?? 'Lương thỏa thuận') ?> · <?= htmlspecialchars($job['employment_type'] ?? 'Full-time') ?>
+                        </div>
+                      </div>
+                      <span class="badge bg-success bg-opacity-10 text-success">Điểm <?= (int)round($job['relevance_score'] ?? 0) ?></span>
+                      <?php if (!empty($job['is_fallback'])): ?>
+                        <span class="badge bg-light text-muted border ms-2">Gợi ý chung</span>
+                      <?php endif; ?>
+                    </div>
+                    <?php if (!empty($job['highlights'])): ?>
+                      <div class="mt-3 d-flex flex-wrap gap-2">
+                        <?php foreach ($job['highlights'] as $highlight): ?>
+                          <span class="badge bg-light text-success border border-success">
+                            <?= htmlspecialchars($highlight) ?>
+                          </span>
+                        <?php endforeach; ?>
+                      </div>
+                    <?php endif; ?>
+                    <div class="mt-3 d-flex flex-wrap gap-2">
+                      <a href="<?= BASE_URL ?>/job/share/view.php?id=<?= (int)$job['id'] ?>" class="btn btn-sm btn-outline-success">
+                        Xem chi tiết
+                      </a>
+                      <a href="<?= BASE_URL ?>/job/share/index.php?keyword=<?= urlencode($job['title'] ?? '') ?>" class="btn btn-sm btn-light">
+                        Tìm việc tương tự
+                      </a>
+                    </div>
+                  </div>
+                </article>
+              <?php endforeach; ?>
+            </div>
+          <?php endif; ?>
+        </div>
+        <?php endif; ?>
+
         <!-- Recent Activity -->
         <div class="dashboard-section">
           <div class="section-header">

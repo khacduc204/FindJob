@@ -88,7 +88,6 @@ ob_start();
         <tr>
            
           <th>ID</th>
-
           <th>Email</th>
           <th>Tên</th>
           <th>Vai trò</th>

@@ -831,5 +831,171 @@ class Job extends Database {
         $stmt->execute();
         return $stmt->get_result();
     }
+
+    public function getSmartRecommendations(array $context, int $limit = 6): array {
+        $candidateId = (int)($context['candidate_id'] ?? 0);
+        if ($candidateId <= 0) {
+            return [];
+        }
+
+        $limit = max(1, min(20, $limit));
+        $locationPatterns = is_array($context['location_patterns'] ?? null) ? $context['location_patterns'] : [];
+        $skills = is_array($context['skills'] ?? null) ? $context['skills'] : [];
+        $preferredCategories = is_array($context['preferred_categories'] ?? null) ? $context['preferred_categories'] : [];
+
+        $scoreComponents = ['5'];
+        $params = [];
+        $types = '';
+
+        if (!empty($locationPatterns)) {
+            $likeParts = [];
+            foreach ($locationPatterns as $pattern) {
+                $likeParts[] = "COALESCE(j.location, '') LIKE ?";
+                $params[] = $pattern;
+                $types .= 's';
+            }
+            if (!empty($likeParts)) {
+                $scoreComponents[] = 'CASE WHEN (' . implode(' OR ', $likeParts) . ') THEN 35 ELSE 0 END';
+            }
+        }
+
+        $skillCount = 0;
+        foreach ($skills as $skill) {
+            $skill = trim((string)$skill);
+            if ($skill === '') {
+                continue;
+            }
+            $skillCount++;
+            if ($skillCount > 6) {
+                break;
+            }
+            $scoreComponents[] = 'CASE WHEN (COALESCE(j.title, \'\') LIKE ? OR COALESCE(j.description, \'\') LIKE ? OR COALESCE(j.job_requirements, \'\') LIKE ?) THEN 15 ELSE 0 END';
+            $like = '%' . $skill . '%';
+            $params[] = $like;
+            $params[] = $like;
+            $params[] = $like;
+            $types .= 'sss';
+        }
+
+        $categoryJoinSql = '';
+        $categorySelect = '0 AS matched_categories';
+        if (!empty($preferredCategories)) {
+            $categoryIds = array_values(array_filter(array_map('intval', $preferredCategories), static function ($value) {
+                return $value > 0;
+            }));
+            if (!empty($categoryIds)) {
+                $placeholders = implode(',', array_fill(0, count($categoryIds), '?'));
+                $categoryJoinSql = "LEFT JOIN (SELECT job_id, COUNT(*) AS matched_categories FROM job_category_map WHERE category_id IN ($placeholders) GROUP BY job_id) prefCats ON prefCats.job_id = j.id";
+                foreach ($categoryIds as $categoryId) {
+                    $params[] = $categoryId;
+                    $types .= 'i';
+                }
+                $categorySelect = 'COALESCE(prefCats.matched_categories, 0) AS matched_categories';
+                $scoreComponents[] = 'COALESCE(prefCats.matched_categories, 0) * 20';
+            }
+        }
+
+        $scoreSql = implode(' + ', $scoreComponents);
+
+        $sql = "SELECT
+                    j.id,
+                    j.employer_id,
+                    j.title,
+                    j.description,
+                    j.job_requirements,
+                    j.location,
+                    j.salary,
+                    j.employment_type,
+                    j.quantity,
+                    j.deadline,
+                    j.created_at,
+                    j.updated_at,
+                    e.company_name,
+                    $categorySelect,
+                    $scoreSql AS relevance_score
+                FROM jobs j
+                INNER JOIN employers e ON e.id = j.employer_id
+                $categoryJoinSql
+                LEFT JOIN applications a ON a.job_id = j.id AND a.candidate_id = ? AND a.status != 'withdrawn'
+                LEFT JOIN saved_jobs sj ON sj.job_id = j.id AND sj.candidate_id = ?
+                WHERE j.status = 'published'
+                  AND (j.deadline IS NULL OR j.deadline >= CURDATE())
+                  AND a.id IS NULL
+                  AND sj.id IS NULL
+                ORDER BY relevance_score DESC, j.updated_at DESC, j.created_at DESC
+                LIMIT ?";
+
+        $params[] = $candidateId;
+        $params[] = $candidateId;
+        $params[] = $limit;
+        $types .= 'iii';
+
+        $stmt = $this->conn->prepare($sql);
+        if ($stmt === false) {
+            return [];
+        }
+
+        $stmt->bind_param($types, ...$params);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return [];
+        }
+
+        $result = $stmt->get_result();
+        $jobs = [];
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $jobs[] = $row;
+            }
+            $result->free();
+        }
+        $stmt->close();
+        return $jobs;
+    }
+
+    public function getFallbackRecommendations(int $limit = 6): array {
+        $limit = max(1, min(20, $limit));
+        $sql = "SELECT
+                    j.id,
+                    j.employer_id,
+                    j.title,
+                    j.description,
+                    j.job_requirements,
+                    j.location,
+                    j.salary,
+                    j.employment_type,
+                    j.quantity,
+                    j.deadline,
+                    j.created_at,
+                    j.updated_at,
+                    e.company_name,
+                    0 AS matched_categories,
+                    0 AS relevance_score
+                FROM jobs j
+                INNER JOIN employers e ON e.id = j.employer_id
+                WHERE j.status = 'published'
+                  AND (j.deadline IS NULL OR j.deadline >= CURDATE())
+                ORDER BY COALESCE(j.updated_at, j.created_at) DESC
+                LIMIT ?";
+        $stmt = $this->conn->prepare($sql);
+        if ($stmt === false) {
+            return [];
+        }
+        $stmt->bind_param('i', $limit);
+        if (!$stmt->execute()) {
+            $stmt->close();
+            return [];
+        }
+        $result = $stmt->get_result();
+        $jobs = [];
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $jobs[] = $row;
+            }
+            $result->free();
+        }
+        $stmt->close();
+        return $jobs;
+    }
 }
 ?>
