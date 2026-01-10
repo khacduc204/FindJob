@@ -3,7 +3,77 @@ require_once dirname(__DIR__, 2) . '/config/config.php';
 require_once dirname(__DIR__, 2) . '/app/models/Candidate.php';
 require_once dirname(__DIR__, 2) . '/app/models/Application.php';
 require_once dirname(__DIR__, 2) . '/app/models/Job.php';
+require_once dirname(__DIR__, 2) . '/app/models/Employer.php';
+require_once dirname(__DIR__, 2) . '/app/models/User.php';
 require_once dirname(__DIR__, 2) . '/app/helpers/cv.php';
+
+function jobfind_send_employer_application_alert(array $payload): void
+{
+    $to = trim((string)($payload['to'] ?? ''));
+    if ($to === '') {
+        return;
+    }
+
+    $jobTitle = trim((string)($payload['job_title'] ?? 'Tin tuyển dụng'));
+    if ($jobTitle === '') {
+        $jobTitle = 'Tin tuyển dụng';
+    }
+
+    $companyName = trim((string)($payload['company_name'] ?? 'Nhà tuyển dụng JobFind'));
+    if ($companyName === '') {
+        $companyName = 'Nhà tuyển dụng JobFind';
+    }
+
+    $candidateName = trim((string)($payload['candidate_name'] ?? ''));
+    if ($candidateName === '') {
+        $candidateName = 'Ứng viên JobFind';
+    }
+
+    $candidateEmail = trim((string)($payload['candidate_email'] ?? ''));
+    $submittedAt = trim((string)($payload['submitted_at'] ?? date('d/m/Y H:i')));
+    $applicationUrl = trim((string)($payload['application_url'] ?? ''));
+    $coverLetter = trim((string)($payload['cover_letter'] ?? ''));
+    $hasCv = !empty($payload['has_cv']);
+
+    $subject = '[JobFind] Ứng viên mới cho vị trí ' . $jobTitle;
+    $lines = [
+        'Chào ' . $companyName . ',',
+        '',
+        $candidateName . ($candidateEmail !== '' ? ' (' . $candidateEmail . ')' : '') . ' vừa ứng tuyển vị trí: ' . $jobTitle . '.',
+        'Thời gian nộp: ' . $submittedAt . '.',
+    ];
+
+    if ($hasCv) {
+        $lines[] = 'Ứng viên đã đính kèm CV trên hệ thống.';
+    }
+
+    if ($coverLetter !== '') {
+        $lines[] = '';
+        $lines[] = 'Trích thư giới thiệu:';
+        $normalized = str_replace(["\r\n", "\r"], "\n", $coverLetter);
+        $snippet = mb_substr($normalized, 0, 280);
+        if (mb_strlen($normalized) > 280) {
+            $snippet .= '…';
+        }
+        $lines[] = $snippet;
+    }
+
+    if ($applicationUrl !== '') {
+        $lines[] = '';
+        $lines[] = 'Xem hồ sơ ngay: ' . $applicationUrl;
+    }
+
+    $lines[] = '';
+    $lines[] = 'Email tự động từ JobFind.';
+
+    $message = implode("\n", $lines);
+    $fromDomain = $_SERVER['HTTP_HOST'] ?? 'jobfind.local';
+    $headers = 'From: no-reply@' . $fromDomain . "\r\n" .
+        "MIME-Version: 1.0\r\n" .
+        "Content-Type: text/plain; charset=UTF-8\r\n";
+
+    @mail($to, $subject, $message, $headers);
+}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: ' . BASE_URL . '/job/share/index.php');
@@ -42,6 +112,8 @@ if ($jobId <= 0) {
 }
 
 $jobModel = new Job();
+$employerModel = new Employer();
+$userModel = new User();
 $job = $jobModel->getById($jobId);
 if (!$job || !Job::isActive($job)) {
     $_SESSION['job_application_flash'] = [
@@ -51,6 +123,38 @@ if (!$job || !Job::isActive($job)) {
     header('Location: ' . $redirectUrl);
     exit;
 }
+
+$jobTitle = trim((string)($job['title'] ?? 'Tin tuyển dụng'));
+if ($jobTitle === '') {
+    $jobTitle = 'Tin tuyển dụng';
+}
+
+$employerContact = null;
+$employerCompanyLabel = 'Nhà tuyển dụng JobFind';
+if (!empty($job['employer_id'])) {
+    $employer = $employerModel->getById((int)$job['employer_id']);
+    if ($employer) {
+        $companyName = trim((string)($employer['company_name'] ?? ''));
+        if ($companyName !== '') {
+            $employerCompanyLabel = $companyName;
+        }
+        $employerUserId = (int)($employer['user_id'] ?? 0);
+        if ($employerUserId > 0) {
+            $employerUser = $userModel->getById($employerUserId);
+            if ($employerUser && !empty($employerUser['email'])) {
+                $employerContact = [
+                    'email' => trim((string)$employerUser['email']),
+                    'name' => trim((string)($employerUser['name'] ?? '')),
+                    'company' => $employerCompanyLabel
+                ];
+            }
+        }
+    }
+}
+
+$candidateUser = $userModel->getById($userId);
+$candidateName = trim((string)($candidateUser['name'] ?? ''));
+$candidateEmail = trim((string)($candidateUser['email'] ?? ''));
 
 $candidateModel = new Candidate();
 $candidate = $candidateModel->getByUserId($userId);
@@ -171,6 +275,19 @@ if ($existingApp) {
             ]));
         }
         if ($reactivated) {
+            if ($employerContact) {
+                jobfind_send_employer_application_alert([
+                    'to' => $employerContact['email'],
+                    'job_title' => $jobTitle,
+                    'company_name' => $employerContact['company'] ?? $employerCompanyLabel,
+                    'candidate_name' => $candidateName,
+                    'candidate_email' => $candidateEmail,
+                    'application_url' => BASE_URL . '/employer/admin/application_view.php?id=' . (int)$existingApp['id'],
+                    'cover_letter' => $formData['cover_letter'] ?? '',
+                    'has_cv' => $resumeSnapshot !== null,
+                    'submitted_at' => date('d/m/Y H:i')
+                ]);
+            }
             $successMessage = 'Bạn đã nộp lại đơn ứng tuyển thành công! Nhà tuyển dụng sẽ xem xét hồ sơ của bạn.';
             if ($updateCvWarning !== null) $successMessage .= ' ' . $updateCvWarning;
             $_SESSION['job_application_flash'] = ['type' => $updateCvWarning ? 'warning' : 'success', 'message' => $successMessage];
@@ -189,6 +306,19 @@ if ($existingApp) {
 } else {
     $created = $applicationModel->createApplication($jobId, $candidateId, $formData['cover_letter'] ?: null, $resumeSnapshot ?: null);
     if ($created) {
+        if ($employerContact) {
+            jobfind_send_employer_application_alert([
+                'to' => $employerContact['email'],
+                'job_title' => $jobTitle,
+                'company_name' => $employerContact['company'] ?? $employerCompanyLabel,
+                'candidate_name' => $candidateName,
+                'candidate_email' => $candidateEmail,
+                'application_url' => BASE_URL . '/employer/admin/application_view.php?id=' . (int)$created,
+                'cover_letter' => $formData['cover_letter'] ?? '',
+                'has_cv' => $resumeSnapshot !== null,
+                'submitted_at' => date('d/m/Y H:i')
+            ]);
+        }
         $successMessage = 'Ứng tuyển thành công! Nhà tuyển dụng sẽ xem xét hồ sơ của bạn.';
         if ($updateCvWarning !== null) {
             $successMessage .= ' ' . $updateCvWarning;
